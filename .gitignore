@@ -20,5 +20,8 @@ ENV/
 
 # Output files
 output/
-*.json
-*.csv
+*.txt
+analysis_*.txt
+
+# Tracking files (keep scraped_posts.json local only)
+scraped_posts.json
