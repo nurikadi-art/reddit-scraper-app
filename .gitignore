@@ -31,3 +31,6 @@ scraped_posts.json
 __pycache__/
 instance/
 .webassets-cache
+
+# Streamlit
+.streamlit/secrets.toml
