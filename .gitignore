@@ -22,6 +22,12 @@ ENV/
 output/
 *.txt
 analysis_*.txt
+viral_scripts_*.json
 
 # Tracking files (keep scraped_posts.json local only)
 scraped_posts.json
+
+# Flask
+__pycache__/
+instance/
+.webassets-cache

@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Viral Script Generator 🎬</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+
+        .control-panel {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        select, input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .category-info {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .launch-btn {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 20px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 20px;
+        }
+
+        .launch-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .launch-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .status-panel {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            margin-bottom: 30px;
+            display: none;
+        }
+
+        .status-panel.active {
+            display: block;
+        }
+
+        .progress-text {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .scripts-container {
+            display: grid;
+            gap: 20px;
+        }
+
+        .script-card {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s;
+        }
+
+        .script-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .script-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .script-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #333;
+            flex: 1;
+            margin-right: 15px;
+        }
+
+        .script-meta {
+            display: flex;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-upvotes {
+            background: #ff6b6b;
+            color: white;
+        }
+
+        .badge-type {
+            background: #667eea;
+            color: white;
+        }
+
+        .script-content {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 12px;
+            white-space: pre-wrap;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .script-link {
+            display: inline-block;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .script-link:hover {
+            text-decoration: underline;
+        }
+
+        .error-message {
+            background: #ff6b6b;
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎬 Viral Script Generator</h1>
+            <p>Generate 20 viral Reels/Shorts scripts from Reddit's hottest posts</p>
+        </div>
+
+        <div class="control-panel">
+            <h2 style="margin-bottom: 20px;">Configuration</h2>
+
+            <div class="form-group">
+                <label for="category">Content Category</label>
+                <select id="category" onchange="updateCategoryInfo()">
+                    {% for cat_name, cat_info in categories.items() %}
+                    <option value="{{ cat_name }}">{{ cat_name.replace('_', ' & ') }}</option>
+                    {% endfor %}
+                </select>
+                <div class="category-info" id="category-info"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="target-count">Number of Scripts to Generate</label>
+                <input type="number" id="target-count" value="20" min="1" max="50">
+            </div>
+
+            <div class="form-group">
+                <label for="posts-per-sub">Posts per Subreddit</label>
+                <input type="number" id="posts-per-sub" value="5" min="1" max="20">
+            </div>
+
+            <button class="launch-btn" id="launch-btn" onclick="startScraping()">
+                🚀 Launch Script Generator
+            </button>
+        </div>
+
+        <div class="status-panel" id="status-panel">
+            <div class="progress-text" id="progress-text">Initializing...</div>
+            <div class="progress-bar">
+                <div class="progress-bar-fill" style="width: 0%" id="progress-fill"></div>
+            </div>
+            <div class="stats" id="stats"></div>
+        </div>
+
+        <div id="error-container"></div>
+        <div id="scripts-container" class="scripts-container"></div>
+    </div>
+
+    <script>
+        const categories = {{ categories|tojson }};
+        let statusInterval = null;
+
+        function updateCategoryInfo() {
+            const category = document.getElementById('category').value;
+            const info = categories[category];
+            const infoDiv = document.getElementById('category-info');
+            infoDiv.innerHTML = `
+                <strong>${info.description}</strong><br>
+                <em>Subreddits: ${info.subreddits.join(', ')}</em>
+            `;
+        }
+
+        function startScraping() {
+            const category = document.getElementById('category').value;
+            const targetCount = parseInt(document.getElementById('target-count').value);
+            const postsPerSub = parseInt(document.getElementById('posts-per-sub').value);
+
+            // Disable button
+            const btn = document.getElementById('launch-btn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Generating Scripts...';
+
+            // Show status panel
+            document.getElementById('status-panel').classList.add('active');
+            document.getElementById('scripts-container').innerHTML = '';
+            document.getElementById('error-container').innerHTML = '';
+
+            // Start scraping
+            fetch('/start_scraping', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    category: category,
+                    target_count: targetCount,
+                    posts_per_sub: postsPerSub
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showError(data.error);
+                    resetButton();
+                } else {
+                    // Start polling status
+                    statusInterval = setInterval(checkStatus, 1000);
+                }
+            })
+            .catch(error => {
+                showError('Failed to start scraping: ' + error);
+                resetButton();
+            });
+        }
+
+        function checkStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    // Update progress text
+                    document.getElementById('progress-text').textContent = data.progress;
+
+                    // Update progress bar (estimate based on scripts generated)
+                    const targetCount = parseInt(document.getElementById('target-count').value);
+                    const progress = (data.scripts.length / targetCount) * 100;
+                    document.getElementById('progress-fill').style.width = progress + '%';
+
+                    // Update stats
+                    updateStats(data.scripts.length, targetCount);
+
+                    // Display scripts
+                    displayScripts(data.scripts);
+
+                    // Check if error
+                    if (data.error) {
+                        showError(data.error);
+                        clearInterval(statusInterval);
+                        resetButton();
+                    }
+
+                    // Check if complete
+                    if (!data.running && data.scripts.length > 0) {
+                        clearInterval(statusInterval);
+                        resetButton();
+                        document.getElementById('progress-fill').style.width = '100%';
+                    }
+                })
+                .catch(error => {
+                    console.error('Status check failed:', error);
+                });
+        }
+
+        function updateStats(current, target) {
+            const statsDiv = document.getElementById('stats');
+            statsDiv.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${current}</div>
+                    <div class="stat-label">Scripts Generated</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${target}</div>
+                    <div class="stat-label">Target Scripts</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${Math.round((current/target)*100)}%</div>
+                    <div class="stat-label">Complete</div>
+                </div>
+            `;
+        }
+
+        function displayScripts(scripts) {
+            const container = document.getElementById('scripts-container');
+
+            if (scripts.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            container.innerHTML = scripts.map((script, index) => `
+                <div class="script-card">
+                    <div class="script-header">
+                        <div class="script-title">${index + 1}. ${script.post_title}</div>
+                        <div class="script-meta">
+                            <span class="badge badge-upvotes">⬆ ${script.upvotes}</span>
+                            <span class="badge badge-type">${script.post_type}</span>
+                        </div>
+                    </div>
+                    <div class="script-content">${script.script}</div>
+                    <a href="${script.post_url}" target="_blank" class="script-link">
+                        📱 View Original Post on r/${script.subreddit} →
+                    </a>
+                </div>
+            `).join('');
+        }
+
+        function showError(message) {
+            document.getElementById('error-container').innerHTML = `
+                <div class="error-message">❌ Error: ${message}</div>
+            `;
+        }
+
+        function resetButton() {
+            const btn = document.getElementById('launch-btn');
+            btn.disabled = false;
+            btn.textContent = '🚀 Launch Script Generator';
+        }
+
+        // Initialize category info on load
+        updateCategoryInfo();
+    </script>
+</body>
+</html>
