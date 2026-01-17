@@ -264,7 +264,7 @@ class RedditScraper:
                 break
 
         print(
-            f"  → Found {new_posts_count} new posts "
+            f"  -> Found {new_posts_count} new posts "
             f"(skipped {skipped_duplicate} duplicates, {skipped_old} too old, "
             f"{skipped_low_score} low score, {missing_id} missing id, {missing_created} missing timestamp)"
         )
@@ -507,7 +507,7 @@ def main():
     for cat_name, cat_info in SUBREDDIT_CATEGORIES.items():
         subs = ", ".join(cat_info["subreddits"])
         print(f"  • {cat_name}: {subs}")
-        print(f"    → {cat_info['description']}\n")
+        print(f"    -> {cat_info['description']}\n")
 
     scraper.scrape_and_analyze(
         category=CATEGORY,
