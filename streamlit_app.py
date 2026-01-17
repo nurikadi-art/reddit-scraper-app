@@ -2,7 +2,7 @@
 """
 Viral Script Generator - Streamlit App
 Generates viral Reels/Shorts scripts from Reddit posts using the Phenomenon formula
-Uses Reddit's public JSON API (no authentication required!)
+Uses SteadyAPI for reliable Reddit data access
 """
 
 import streamlit as st
@@ -102,26 +102,36 @@ Call to Action:
 """
 
 
-def get_anthropic_key():
-    """Get Anthropic API key from Streamlit secrets or environment variables"""
+def get_api_keys():
+    """Get API keys from Streamlit secrets or environment variables"""
     try:
         # Try Streamlit secrets first (for Streamlit Cloud)
-        return st.secrets['ANTHROPIC_API_KEY']
+        return {
+            'steadyapi_key': st.secrets.get('STEADYAPI_KEY'),
+            'anthropic_key': st.secrets['ANTHROPIC_API_KEY']
+        }
     except (KeyError, FileNotFoundError):
         # Fall back to environment variables (for local development)
         try:
             from dotenv import load_dotenv
             load_dotenv()
-            return os.getenv('ANTHROPIC_API_KEY')
+            return {
+                'steadyapi_key': os.getenv('STEADYAPI_KEY'),
+                'anthropic_key': os.getenv('ANTHROPIC_API_KEY')
+            }
         except Exception:
-            return None
+            return {
+                'steadyapi_key': None,
+                'anthropic_key': None
+            }
 
 
-def init_anthropic():
-    """Initialize Anthropic client"""
-    api_key = get_anthropic_key()
+def init_clients():
+    """Initialize API clients"""
+    keys = get_api_keys()
 
-    if not api_key:
+    # Anthropic is required
+    if not keys['anthropic_key']:
         st.error("❌ **Missing Anthropic API Key!**")
         st.markdown("""
         **Please configure your Anthropic API key:**
@@ -137,10 +147,12 @@ def init_anthropic():
         st.stop()
 
     try:
-        return Anthropic(api_key=api_key)
+        anthropic = Anthropic(api_key=keys['anthropic_key'])
     except Exception as e:
         st.error(f"❌ **Error initializing Anthropic API:** {e}")
         st.stop()
+
+    return anthropic, keys['steadyapi_key']
 
 
 def load_tracking():
@@ -159,29 +171,103 @@ def save_tracking(tracking_data):
         json.dump(tracking_data, f, indent=2)
 
 
-def fetch_reddit_posts(subreddit_name, limit=50, sort='hot'):
+def fetch_reddit_posts_steadyapi(subreddit_name, limit=50, api_key=None):
     """
-    Fetch posts from Reddit using public JSON API (no authentication required!)
+    Fetch posts using SteadyAPI
 
     Args:
         subreddit_name: Name of subreddit
-        limit: Number of posts to fetch (max 100)
-        sort: 'hot', 'new', or 'top'
+        limit: Number of posts to fetch
+        api_key: SteadyAPI key (optional, can use public endpoint)
 
     Returns:
         List of post dictionaries
     """
-    url = f"https://www.reddit.com/r/{subreddit_name}/{sort}.json"
+    # SteadyAPI endpoint
+    url = f"https://api.steadyapi.com/reddit/r/{subreddit_name}/hot"
+
+    headers = {
+        'User-Agent': 'ViralScriptGenerator/1.0'
+    }
+
+    # Add API key if provided
+    if api_key:
+        headers['X-API-KEY'] = api_key
+
+    params = {
+        'limit': min(limit, 100)
+    }
+
+    try:
+        with httpx.Client(timeout=30) as client:
+            response = client.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+        posts = []
+
+        # Handle both SteadyAPI format and Reddit format
+        if isinstance(data, dict) and 'data' in data:
+            children = data['data'].get('children', [])
+        elif isinstance(data, list):
+            children = data
+        else:
+            children = []
+
+        for item in children:
+            # Handle different response formats
+            if isinstance(item, dict) and 'data' in item:
+                post = item['data']
+            else:
+                post = item
+
+            posts.append({
+                'id': post.get('id', ''),
+                'title': post.get('title', ''),
+                'author': post.get('author', '[deleted]'),
+                'score': post.get('score', 0),
+                'upvote_ratio': post.get('upvote_ratio', 0),
+                'url': post.get('url', ''),
+                'permalink': post.get('permalink', ''),
+                'created_utc': post.get('created_utc', time.time()),
+                'num_comments': post.get('num_comments', 0),
+                'selftext': post.get('selftext', ''),
+                'subreddit': subreddit_name,
+                'is_self': post.get('is_self', False)
+            })
+
+        return posts
+
+    except httpx.HTTPStatusError as e:
+        # Silently fall back to public Reddit JSON on error
+        return fetch_reddit_posts_public(subreddit_name, limit)
+    except Exception as e:
+        # Silently fall back to public Reddit JSON on error
+        return fetch_reddit_posts_public(subreddit_name, limit)
+
+
+def fetch_reddit_posts_public(subreddit_name, limit=50):
+    """
+    Fallback: Fetch posts using Reddit's public JSON API
+
+    Args:
+        subreddit_name: Name of subreddit
+        limit: Number of posts to fetch
+
+    Returns:
+        List of post dictionaries
+    """
+    url = f"https://www.reddit.com/r/{subreddit_name}/hot.json"
     headers = {
         'User-Agent': 'ViralScriptGenerator/1.0'
     }
     params = {
-        'limit': min(limit, 100)  # Reddit max is 100
+        'limit': min(limit, 100)
     }
 
     try:
-        with httpx.Client() as client:
-            response = client.get(url, headers=headers, params=params, timeout=30)
+        with httpx.Client(timeout=30) as client:
+            response = client.get(url, headers=headers, params=params)
             response.raise_for_status()
             data = response.json()
 
@@ -205,68 +291,77 @@ def fetch_reddit_posts(subreddit_name, limit=50, sort='hot'):
 
         return posts
 
-    except httpx.HTTPStatusError as e:
-        st.warning(f"⚠️ Could not fetch r/{subreddit_name}: {e.response.status_code}")
-        return []
     except Exception as e:
-        st.warning(f"⚠️ Error fetching r/{subreddit_name}: {e}")
+        st.warning(f"⚠️ Could not fetch r/{subreddit_name}: {e}")
         return []
 
 
-def fetch_reddit_comments(subreddit_name, post_id, limit=10):
+def fetch_reddit_comments(subreddit_name, post_id, limit=10, api_key=None):
     """
-    Fetch comments from a Reddit post using public JSON API
+    Fetch comments from a Reddit post (tries SteadyAPI first, falls back to public)
 
     Args:
         subreddit_name: Name of subreddit
         post_id: Reddit post ID
         limit: Number of comments to fetch
+        api_key: SteadyAPI key (optional)
 
     Returns:
         List of comment dictionaries
     """
-    url = f"https://www.reddit.com/r/{subreddit_name}/comments/{post_id}.json"
-    headers = {
-        'User-Agent': 'ViralScriptGenerator/1.0'
-    }
+    # Try SteadyAPI first if we have a key
+    if api_key:
+        url = f"https://api.steadyapi.com/reddit/r/{subreddit_name}/comments/{post_id}"
+        headers = {
+            'User-Agent': 'ViralScriptGenerator/1.0',
+            'X-API-KEY': api_key
+        }
+    else:
+        # Fall back to public Reddit JSON
+        url = f"https://www.reddit.com/r/{subreddit_name}/comments/{post_id}.json"
+        headers = {
+            'User-Agent': 'ViralScriptGenerator/1.0'
+        }
+
     params = {
         'limit': limit
     }
 
     try:
-        with httpx.Client() as client:
-            response = client.get(url, headers=headers, params=params, timeout=30)
+        with httpx.Client(timeout=30) as client:
+            response = client.get(url, headers=headers, params=params)
             response.raise_for_status()
             data = response.json()
 
         comments = []
-        # Comments are in the second element of the response
-        if len(data) > 1:
+
+        # Handle Reddit's response format (array with 2 elements)
+        if isinstance(data, list) and len(data) > 1:
             comment_listing = data[1]['data']['children']
 
             for child in comment_listing[:limit]:
-                if child['kind'] == 't1':  # Comment type
+                if child.get('kind') == 't1':  # Comment type
                     comment = child['data']
                     if comment.get('body') and len(comment['body']) > 20:
                         comments.append({
                             'author': comment.get('author', '[deleted]'),
                             'body': comment['body'],
-                            'score': comment['score']
+                            'score': comment.get('score', 0)
                         })
 
         return comments
 
-    except Exception as e:
+    except Exception:
         return []
 
 
-def get_viral_posts(subreddit_name, limit=20, hours_limit=72, min_upvotes=100, tracking_data=None):
+def get_viral_posts(subreddit_name, limit=20, hours_limit=72, min_upvotes=100, tracking_data=None, api_key=None):
     """Fetch viral posts from a subreddit"""
     if tracking_data is None:
         tracking_data = {'post_ids': []}
 
     # Fetch more posts to account for filtering
-    raw_posts = fetch_reddit_posts(subreddit_name, limit=limit * 3, sort='hot')
+    raw_posts = fetch_reddit_posts_steadyapi(subreddit_name, limit=limit * 3, api_key=api_key)
 
     cutoff_time = datetime.now() - timedelta(hours=hours_limit)
     cutoff_timestamp = cutoff_time.timestamp()
@@ -298,21 +393,25 @@ def get_viral_posts(subreddit_name, limit=20, hours_limit=72, min_upvotes=100, t
         post['age_hours'] = round((datetime.now() - post_time).total_seconds() / 3600, 1)
         post['post_type'] = post_type
 
+        # Ensure permalink is absolute
+        if not post['permalink'].startswith('http'):
+            post['permalink'] = f"https://reddit.com{post['permalink']}"
+
         posts.append(post)
         tracking_data['post_ids'].append(post['id'])
 
         if len(posts) >= limit:
             break
 
-        # Be nice to Reddit's servers
-        time.sleep(0.5)
+        # Be nice to servers
+        time.sleep(0.3)
 
     return posts
 
 
-def get_viral_comments(subreddit_name, post_id, post_type='discussion', limit=5):
+def get_viral_comments(subreddit_name, post_id, post_type='discussion', limit=5, api_key=None):
     """Fetch top comments from a post"""
-    comments = fetch_reddit_comments(subreddit_name, post_id, limit=limit * 2)
+    comments = fetch_reddit_comments(subreddit_name, post_id, limit=limit * 2, api_key=api_key)
 
     # Filter for quality
     quality_comments = []
@@ -327,7 +426,7 @@ def get_viral_comments(subreddit_name, post_id, post_type='discussion', limit=5)
         if len(quality_comments) >= limit:
             break
 
-    time.sleep(0.5)  # Be nice to Reddit's servers
+    time.sleep(0.3)  # Be nice to servers
     return quality_comments
 
 
@@ -364,7 +463,7 @@ def generate_script(anthropic_client, post):
 # Main UI
 st.title("🎬 Viral Script Generator")
 st.markdown("**Generate viral Reels/Shorts scripts from Reddit using the Phenomenon formula**")
-st.info("✨ **No Reddit API needed!** Uses Reddit's public data - just add your Anthropic API key")
+st.info("✨ **Powered by SteadyAPI** for reliable Reddit data access")
 
 # Sidebar configuration
 with st.sidebar:
@@ -391,8 +490,14 @@ with st.sidebar:
 if generate_button:
     try:
         # Initialize
-        anthropic = init_anthropic()
+        anthropic, steadyapi_key = init_clients()
         tracking_data = load_tracking()
+
+        # Show API status
+        if steadyapi_key:
+            st.success("✅ Using SteadyAPI for enhanced reliability")
+        else:
+            st.info("ℹ️ Using Reddit public API (add STEADYAPI_KEY for better performance)")
 
         # Progress tracking
         progress_bar = st.progress(0)
@@ -423,12 +528,19 @@ if generate_button:
                 limit=posts_per_sub,
                 hours_limit=72,
                 min_upvotes=min_upvotes,
-                tracking_data=tracking_data
+                tracking_data=tracking_data,
+                api_key=steadyapi_key
             )
 
             # Get comments
             for post in posts:
-                comments = get_viral_comments(subreddit, post['id'], post['post_type'], limit=5)
+                comments = get_viral_comments(
+                    subreddit,
+                    post['id'],
+                    post['post_type'],
+                    limit=5,
+                    api_key=steadyapi_key
+                )
                 post['top_comments'] = comments
 
             all_posts.extend(posts)
@@ -506,7 +618,7 @@ if generate_button:
 
 else:
     # Welcome screen
-    st.success("✨ **Simplified Setup!** Only Anthropic API key needed - no Reddit authentication required!")
+    st.success("✨ **Simple Setup!** Works with or without SteadyAPI - Anthropic API key is all you need to start!")
 
     st.markdown("### 🎯 The Viral Formula")
     st.markdown("""
@@ -521,3 +633,6 @@ else:
     st.markdown("### 📊 Content Categories")
     for cat_name, cat_info in SUBREDDIT_CATEGORIES.items():
         st.markdown(f"**{cat_name.replace('_', ' & ')}**: {cat_info['description']}")
+
+    st.markdown("---")
+    st.markdown("**💡 Optional:** Add `STEADYAPI_KEY` in secrets for enhanced reliability and better rate limits")
