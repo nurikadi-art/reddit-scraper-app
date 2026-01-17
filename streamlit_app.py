@@ -35,6 +35,32 @@ ALL_SUBREDDITS = {
     "🎯 Other": ["SaaS", "Copywriting", "SideHustle", "UnpopularOpinion", "ChangeMyView", "ShowerThoughts", "ExplainLikeImFive", "Futurology", "InternetIsBeautiful"],
 }
 
+# Audience profiles for targeted content
+AUDIENCE_PROFILES = {
+    "🚀 Entrepreneurs & Business Owners": {
+        "description": "Building and scaling businesses, startup stories, B2B strategies",
+        "recommended_subs": ["Entrepreneur", "startups", "SaaS", "smallbusiness", "sales", "B2BMarketing", "SideHustle"],
+        "focus": "Business growth, revenue strategies, scaling operations, and entrepreneurial mindset. You're looking for practical advice on building profitable companies, finding customers, and navigating the challenges of entrepreneurship.",
+    },
+    "💻 Aspiring Freelancers (Global)": {
+        "description": "People from emerging markets wanting to work remotely for US/global companies",
+        "recommended_subs": ["remotework", "digitalnomad", "Entrepreneur", "SideHustle", "Copywriting", "marketing"],
+        "focus": "Remote work opportunities, freelancing skills, global work, and financial independence. You want to break free from local job markets and access high-paying international remote work, building marketable skills that let you work from anywhere.",
+    },
+    "🌍 Life Improvement (Third World Focus)": {
+        "description": "People from developing countries seeking better opportunities and life transformation",
+        "recommended_subs": ["Entrepreneur", "SideHustle", "remotework", "digitalnomad", "personalfinance", "selfimprovement"],
+        "focus": "Breaking barriers, accessing global opportunities, achieving financial freedom, and transforming your life. You're looking to escape limited local opportunities and tap into the global economy to create a better future for yourself and your family.",
+    },
+    "💰 Financial Freedom Seekers": {
+        "description": "People wanting to escape 9-5, build wealth, and achieve financial independence",
+        "recommended_subs": ["Entrepreneur", "personalfinance", "SideHustle", "sales", "Copywriting", "marketing"],
+        "focus": "Wealth building, passive income, financial literacy, and economic independence. You want to break free from trading time for money and build systems that generate income without being tied to a desk.",
+    },
+}
+
+SCRIPTS_LOG_FILE = "scripts_history.json"
+
 # Flatten for easy access
 def get_all_subreddits_flat():
     """Get flat list of all subreddits with category labels."""
@@ -52,6 +78,9 @@ def extract_subreddit_name(formatted_name):
 VIRAL_FORMULA_PROMPT = """Role: You are an expert social media copywriter specializing in viral content for cold audiences. Your goal is to create scroll-stopping copy that triggers engagement using the "Phenomenon" viral formula.
 
 Task: Analyze this viral Reddit post and create multiple copy variations for social media.
+
+TARGET AUDIENCE: {audience_focus}
+Your copy MUST speak directly to this audience's pain points, aspirations, and current situation. Make it deeply relevant to their journey and goals.
 
 CRITICAL FRAMING RULE:
 - If the post is about someone's personal experience (e.g., "I made $100k", "I quit my job", news, or case study), you MUST frame the copy as: "Someone else did this - here are my thoughts" or "Here's what I learned from this" or "This person's story teaches us..."
@@ -219,6 +248,42 @@ def save_tracking(tracking_data: Dict[str, Any]) -> None:
     tracking_data["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open("scraped_posts.json", "w", encoding="utf-8") as f:
         json.dump(tracking_data, f, indent=2)
+
+
+def load_scripts_history() -> List[Dict[str, Any]]:
+    """Load scripts history from log file."""
+    if Path(SCRIPTS_LOG_FILE).exists():
+        try:
+            with open(SCRIPTS_LOG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+
+def save_script_to_history(script_data: Dict[str, Any], audience: str) -> None:
+    """Save a generated script to history log."""
+    history = load_scripts_history()
+
+    log_entry = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "audience": audience,
+        "post_title": script_data.get("title", ""),
+        "subreddit": script_data.get("subreddit", ""),
+        "post_url": script_data.get("url", ""),
+        "post_score": script_data.get("post_data", {}).get("score", 0),
+        "post_comments": script_data.get("post_data", {}).get("num_comments", 0),
+        "script": script_data.get("script", ""),
+    }
+
+    history.append(log_entry)
+
+    # Keep only last 500 entries
+    if len(history) > 500:
+        history = history[-500:]
+
+    with open(SCRIPTS_LOG_FILE, "w", encoding="utf-8") as f:
+        json.dump(history, f, indent=2, ensure_ascii=False)
 
 
 def normalize_timestamp(value: Any) -> Optional[float]:
@@ -531,7 +596,7 @@ def get_viral_posts(
     return posts, debug
 
 
-def generate_script(anthropic_client: Anthropic, post: Dict[str, Any]) -> str:
+def generate_script(anthropic_client: Anthropic, post: Dict[str, Any], audience_focus: str = "") -> str:
     """Generate script with Claude."""
     content = post.get("selftext", "")[:1000] if post.get("selftext") else "Link post - see URL"
 
@@ -549,6 +614,7 @@ def generate_script(anthropic_client: Anthropic, post: Dict[str, Any]) -> str:
                 comments_text += f"\nComment {i} ({comment['score']} upvotes):\n{comment['body'][:300]}\n"
 
     prompt = VIRAL_FORMULA_PROMPT.format(
+        audience_focus=audience_focus or "General audience seeking life improvement and opportunities",
         title=post["title"],
         subreddit=post["subreddit"],
         post_type=post.get("post_type", "discussion"),
@@ -607,23 +673,47 @@ Hook 2:
 
 
 st.title("🎬 Viral Script Generator")
-st.markdown("**Generate viral Reels/Shorts scripts from Reddit using the Phenomenon formula**")
-st.info("✨ **Powered by ScrapeCreators API** for reliable Reddit data access")
+st.markdown("**Generate viral scripts from Reddit using the Phenomenon formula**")
+
+# Tabs
+tab1, tab2 = st.tabs(["🚀 Generate Scripts", "📚 History"])
 
 # Sidebar
 with st.sidebar:
     st.header("⚙️ Configuration")
 
+    # Audience Selection
+    st.subheader("🎯 Target Audience")
+
+    selected_audience = st.selectbox(
+        "Who are you creating content for?",
+        options=list(AUDIENCE_PROFILES.keys()),
+        help="Choose your target audience for tailored copy"
+    )
+
+    audience_info = AUDIENCE_PROFILES[selected_audience]
+    st.info(f"**{audience_info['description']}**")
+
+    # Quick select recommended subreddits
+    if st.button("✨ Use Recommended Subreddits", use_container_width=True):
+        recommended = [f"{sub} ({next((cat for cat, subs in ALL_SUBREDDITS.items() if sub in subs), '🎯 Other')})"
+                      for sub in audience_info['recommended_subs']]
+        st.session_state.selected_subs = recommended
+        st.rerun()
+
+    st.divider()
+
     # Subreddit Selection
     st.subheader("📂 Select Subreddits")
 
-    # Get default subreddits (AI & Tech as default)
-    default_subs = [f"{sub} (🤖 AI & Tech)" for sub in ALL_SUBREDDITS["🤖 AI & Tech"]]
+    # Get default from session state or use recommended
+    if "selected_subs" not in st.session_state:
+        st.session_state.selected_subs = [f"{sub} ({next((cat for cat, subs in ALL_SUBREDDITS.items() if sub in subs), '🎯 Other')})" for sub in audience_info['recommended_subs'][:5]]
 
     selected_subreddits_formatted = st.multiselect(
         "Choose which subreddits to scrape",
         options=get_all_subreddits_flat(),
-        default=default_subs[:3],
+        default=st.session_state.selected_subs[:5],
         help="Subreddits are organized by category. Select as many as you want!"
     )
 
@@ -678,142 +768,150 @@ with st.sidebar:
     st.divider()
     generate_button = st.button("🚀 Generate Scripts", type="primary", use_container_width=True)
 
-# Main Execution
-if generate_button:
-    anthropic, scrapecreators_key = init_clients()
-    tracking_data = load_tracking()
+# Tab 1: Generate Scripts
+with tab1:
+    st.info(f"✨ **Creating content for:** {selected_audience}")
 
-    progress_bar = st.progress(0)
-    status_text = st.empty()
+    if generate_button:
+        anthropic, scrapecreators_key = init_clients()
+        tracking_data = load_tracking()
 
-    col1, col2 = st.columns(2)
-    with col1:
-        posts_found_metric = st.empty()
-    with col2:
-        scripts_gen_metric = st.empty()
+        progress_bar = st.progress(0)
+        status_text = st.empty()
 
-    all_posts: List[Dict[str, Any]] = []
-    debug_entries: List[Dict[str, Any]] = []
+        col1, col2 = st.columns(2)
+        with col1:
+            posts_found_metric = st.empty()
+        with col2:
+            scripts_gen_metric = st.empty()
 
-    if not selected_subreddits:
-        st.error("❌ No subreddits selected. Please select at least one subreddit.")
-        st.stop()
+        all_posts: List[Dict[str, Any]] = []
+        debug_entries: List[Dict[str, Any]] = []
 
-    # 1. Fetching Phase
-    for sub in selected_subreddits:
-        status_text.text(f"📊 Scanning r/{sub}...")
-        found, debug_info = get_viral_posts(
-            sub,
-            limit=int(posts_per_sub),
-            hours_limit=int(hours_limit),
-            min_upvotes=int(min_upvotes),
-            tracking_data=tracking_data,
-            api_key=scrapecreators_key,
-        )
+        if not selected_subreddits:
+            st.error("❌ No subreddits selected. Please select at least one subreddit.")
+            st.stop()
 
-        debug_entries.append(debug_info)
-
-        for post in found:
-            comment_url = post.get("permalink") or post.get("url")
-            if comment_url and comment_url.startswith("/"):
-                comment_url = f"https://reddit.com{comment_url}"
-            comments, comment_debug = fetch_reddit_comments_scrapecreators(
-                sub, comment_url, limit=5, api_key=scrapecreators_key
+        # 1. Fetching Phase
+        for sub in selected_subreddits:
+            status_text.text(f"📊 Scanning r/{sub}...")
+            found, debug_info = get_viral_posts(
+                sub,
+                limit=int(posts_per_sub),
+                hours_limit=int(hours_limit),
+                min_upvotes=int(min_upvotes),
+                tracking_data=tracking_data,
+                api_key=scrapecreators_key,
             )
-            post["top_comments"] = comments
-            if debug_mode and comment_debug.get("error"):
-                debug_info.setdefault("comment_errors", []).append(
-                    {"post_id": post["id"], "error": comment_debug["error"]}
+
+            debug_entries.append(debug_info)
+
+            for post in found:
+                comment_url = post.get("permalink") or post.get("url")
+                if comment_url and comment_url.startswith("/"):
+                    comment_url = f"https://reddit.com{comment_url}"
+                comments, comment_debug = fetch_reddit_comments_scrapecreators(
+                    sub, comment_url, limit=5, api_key=scrapecreators_key
+                )
+                post["top_comments"] = comments
+                if debug_mode and comment_debug.get("error"):
+                    debug_info.setdefault("comment_errors", []).append(
+                        {"post_id": post["id"], "error": comment_debug["error"]}
+                    )
+
+            all_posts.extend(found)
+            posts_found_metric.metric("Posts Found", len(all_posts))
+
+            if len(all_posts) >= target_count:
+                all_posts = all_posts[: target_count]
+                break
+
+        if not all_posts:
+            st.warning("No new viral posts found. Try lowering upvote threshold or hours back.")
+            if not debug_mode:
+                st.info("Enable ScrapeCreators debug details in the sidebar to see request diagnostics.")
+        else:
+            # 2. Generation Phase
+            generated_scripts: List[Dict[str, Any]] = []
+            for i, post in enumerate(all_posts, 1):
+                status_text.text(f"🤖 Writing script for: {post['title'][:40]}...")
+                try:
+                    script = generate_script(anthropic, post, audience_info["focus"])
+                except Exception as exc:
+                    st.error(f"❌ Script generation failed: {exc}")
+                    continue
+
+                generated_scripts.append(
+                    {
+                        "title": post["title"],
+                        "subreddit": post["subreddit"],
+                        "url": post["permalink"],
+                        "script": script,
+                        "post_data": post,  # Store full post data for regeneration
+                    }
                 )
 
-        all_posts.extend(found)
-        posts_found_metric.metric("Posts Found", len(all_posts))
+                # Save to history
+                save_script_to_history(generated_scripts[-1], selected_audience)
 
-        if len(all_posts) >= target_count:
-            all_posts = all_posts[: target_count]
-            break
+                scripts_gen_metric.metric("Scripts Generated", len(generated_scripts))
+                progress_bar.progress(int((i / len(all_posts)) * 100))
 
-    if not all_posts:
-        st.warning("No new viral posts found. Try lowering upvote threshold or hours back.")
-        if not debug_mode:
-            st.info("Enable ScrapeCreators debug details in the sidebar to see request diagnostics.")
-    else:
-        # 2. Generation Phase
-        generated_scripts: List[Dict[str, Any]] = []
-        for i, post in enumerate(all_posts, 1):
-            status_text.text(f"🤖 Writing script for: {post['title'][:40]}...")
-            try:
-                script = generate_script(anthropic, post)
-            except Exception as exc:
-                st.error(f"❌ Script generation failed: {exc}")
-                continue
+            # 3. Results Display
+            st.success(f"✅ Generated {len(generated_scripts)} scripts!")
+            save_tracking(tracking_data)
 
-            generated_scripts.append(
-                {
-                    "title": post["title"],
-                    "subreddit": post["subreddit"],
-                    "url": post["permalink"],
-                    "script": script,
-                    "post_data": post,  # Store full post data for regeneration
-                }
-            )
+            # Store in session state for regeneration
+            st.session_state.generated_scripts = generated_scripts
+            st.session_state.anthropic_client = anthropic
+            st.session_state.selected_audience = selected_audience
 
-            scripts_gen_metric.metric("Scripts Generated", len(generated_scripts))
-            progress_bar.progress(int((i / len(all_posts)) * 100))
+    # Display generated scripts (whether just generated or from session state)
+    if "generated_scripts" in st.session_state and st.session_state.generated_scripts:
+        st.divider()
+        st.header("📝 Generated Scripts")
 
-        # 3. Results Display
-        st.success(f"✅ Generated {len(generated_scripts)} scripts!")
-        save_tracking(tracking_data)
+        for i, data in enumerate(st.session_state.generated_scripts, 1):
+            with st.expander(f"Script {i}: {data['title']}", expanded=(i == 1)):
+                # Display the script
+                script_key = f"script_{i}"
+                if script_key not in st.session_state:
+                    st.session_state[script_key] = data["script"]
 
-        # Store in session state for regeneration
-        st.session_state.generated_scripts = generated_scripts
-        st.session_state.anthropic_client = anthropic
+                st.markdown(st.session_state[script_key])
+                st.markdown(f"**Source:** r/{data['subreddit']} | [View Original Post]({data['url']})")
 
-# Display generated scripts (whether just generated or from session state)
-if "generated_scripts" in st.session_state and st.session_state.generated_scripts:
-    st.divider()
-    st.header("📝 Generated Scripts")
+                # Action buttons
+                col1, col2 = st.columns(2)
 
-    for i, data in enumerate(st.session_state.generated_scripts, 1):
-        with st.expander(f"Script {i}: {data['title']}", expanded=(i == 1)):
-            # Display the script
-            script_key = f"script_{i}"
-            if script_key not in st.session_state:
-                st.session_state[script_key] = data["script"]
+                with col1:
+                    if st.button(f"🔄 Rewrite Script", key=f"rewrite_{i}", use_container_width=True):
+                        with st.spinner("Regenerating script..."):
+                            try:
+                                new_script = generate_script(
+                                    st.session_state.anthropic_client,
+                                    data["post_data"],
+                                    AUDIENCE_PROFILES.get(st.session_state.get("selected_audience", list(AUDIENCE_PROFILES.keys())[0]), {}).get("focus", "")
+                                )
+                                st.session_state[script_key] = new_script
+                                st.rerun()
+                            except Exception as exc:
+                                st.error(f"❌ Regeneration failed: {exc}")
 
-            st.markdown(st.session_state[script_key])
-            st.markdown(f"**Source:** r/{data['subreddit']} | [View Original Post]({data['url']})")
-
-            # Action buttons
-            col1, col2 = st.columns(2)
-
-            with col1:
-                if st.button(f"🔄 Rewrite Script", key=f"rewrite_{i}", use_container_width=True):
-                    with st.spinner("Regenerating script..."):
-                        try:
-                            new_script = generate_script(
-                                st.session_state.anthropic_client,
-                                data["post_data"]
-                            )
-                            st.session_state[script_key] = new_script
-                            st.rerun()
-                        except Exception as exc:
-                            st.error(f"❌ Regeneration failed: {exc}")
-
-            with col2:
-                if st.button(f"✨ Generate 5 More Hooks", key=f"hooks_{i}", use_container_width=True):
-                    with st.spinner("Generating additional hooks..."):
-                        try:
-                            hooks = generate_more_hooks(
-                                st.session_state.anthropic_client,
-                                data["post_data"],
-                                num_hooks=5
-                            )
-                            st.success("🎯 Additional Hooks Generated!")
-                            st.markdown("---")
-                            st.markdown(hooks)
-                        except Exception as exc:
-                            st.error(f"❌ Hook generation failed: {exc}")
+                with col2:
+                    if st.button(f"✨ Generate 5 More Hooks", key=f"hooks_{i}", use_container_width=True):
+                        with st.spinner("Generating additional hooks..."):
+                            try:
+                                hooks = generate_more_hooks(
+                                    st.session_state.anthropic_client,
+                                    data["post_data"],
+                                    num_hooks=5
+                                )
+                                st.success("🎯 Additional Hooks Generated!")
+                                st.markdown("---")
+                                st.markdown(hooks)
+                            except Exception as exc:
+                                st.error(f"❌ Hook generation failed: {exc}")
 
         if debug_mode:
             with st.expander("🧪 ScrapeCreators Debug Details", expanded=False):
@@ -835,3 +933,73 @@ if "generated_scripts" in st.session_state and st.session_state.generated_script
                     )
                 st.dataframe(summary_rows, use_container_width=True)
                 st.json(debug_entries)
+
+# Tab 2: History
+with tab2:
+    st.header("📚 Script History")
+
+    history = load_scripts_history()
+
+    if not history:
+        st.info("📭 No scripts generated yet. Generate some scripts in the 'Generate Scripts' tab!")
+    else:
+        # Stats
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Scripts", len(history))
+        with col2:
+            audiences = list(set(entry.get("audience", "Unknown") for entry in history))
+            st.metric("Audiences", len(audiences))
+        with col3:
+            if history:
+                last_date = history[-1].get("timestamp", "Unknown")
+                st.metric("Last Generated", last_date.split(" ")[0] if " " in last_date else last_date)
+
+        st.divider()
+
+        # Filters
+        col1, col2 = st.columns(2)
+        with col1:
+            filter_audience = st.selectbox(
+                "Filter by Audience",
+                options=["All"] + list(AUDIENCE_PROFILES.keys()),
+                key="history_audience_filter"
+            )
+        with col2:
+            filter_subreddit = st.multiselect(
+                "Filter by Subreddit",
+                options=sorted(list(set(entry.get("subreddit", "") for entry in history if entry.get("subreddit")))),
+                key="history_subreddit_filter"
+            )
+
+        # Apply filters
+        filtered_history = history
+        if filter_audience != "All":
+            filtered_history = [h for h in filtered_history if h.get("audience") == filter_audience]
+        if filter_subreddit:
+            filtered_history = [h for h in filtered_history if h.get("subreddit") in filter_subreddit]
+
+        # Reverse to show newest first
+        filtered_history = list(reversed(filtered_history))
+
+        st.caption(f"Showing {len(filtered_history)} of {len(history)} scripts")
+
+        # Display scripts
+        for i, entry in enumerate(filtered_history, 1):
+            with st.expander(f"[{entry.get('timestamp', 'Unknown')}] {entry.get('post_title', 'Untitled')}", expanded=False):
+                st.markdown(f"**Audience:** {entry.get('audience', 'Unknown')}")
+                st.markdown(f"**Subreddit:** r/{entry.get('subreddit', 'Unknown')}")
+                st.markdown(f"**Post Score:** {entry.get('post_score', 0):,} upvotes | {entry.get('post_comments', 0):,} comments")
+                if entry.get('post_url'):
+                    st.markdown(f"**Source:** [View Original Post]({entry.get('post_url')})")
+                st.divider()
+                st.markdown(entry.get('script', 'No script content'))
+
+        # Clear history button
+        st.divider()
+        if st.button("🗑️ Clear All History", type="secondary"):
+            if st.button("⚠️ Confirm Clear History", type="primary"):
+                with open(SCRIPTS_LOG_FILE, "w", encoding="utf-8") as f:
+                    json.dump([], f)
+                st.success("✅ History cleared!")
+                st.rerun()
