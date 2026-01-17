@@ -1,135 +1,109 @@
 #!/usr/bin/env python3
 """
-Reddit API Credential Tester
-Use this to verify your Reddit API credentials are working
+SteadyAPI Credential Tester
+Use this to verify your SteadyAPI key is working
 """
 
-import praw
+import os
 import sys
 
-def test_reddit_credentials(client_id, client_secret, user_agent):
-    """Test if Reddit API credentials are valid"""
+import httpx
 
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except Exception:
+    pass
+
+
+def test_steadyapi_key(api_key: str, subreddit: str = "Python") -> bool:
+    """Test if SteadyAPI key is valid by fetching one post."""
     print("=" * 70)
-    print("🔍 Testing Reddit API Credentials")
+    print("🔍 Testing SteadyAPI Key")
     print("=" * 70)
 
-    print(f"\nClient ID: {client_id[:10]}... (hidden)")
-    print(f"Client Secret: {client_secret[:10]}... (hidden)")
-    print(f"User Agent: {user_agent}")
+    base_urls = ["https://api.steadyapi.com/v1", "https://api.steadyapi.com"]
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "X-API-KEY": api_key,
+        "Accept": "application/json",
+        "User-Agent": "SteadyAPITest/1.0",
+    }
+    params = {"limit": 1}
 
-    try:
-        print("\n📡 Initializing Reddit client...")
-        reddit = praw.Reddit(
-            client_id=client_id,
-            client_secret=client_secret,
-            user_agent=user_agent
-        )
+    last_error = None
+    for base_url in base_urls:
+        url = f"{base_url}/reddit/r/{subreddit}/hot"
+        try:
+            response = httpx.get(url, headers=headers, params=params, timeout=30)
+        except Exception as exc:
+            last_error = f"Request failed: {exc}"
+            continue
 
-        print("✅ Reddit client initialized")
+        print(f"\n📡 Request: {url}")
+        print(f"Status: {response.status_code}")
 
-        print("\n🔐 Testing authentication...")
-        # This will trigger the OAuth authentication
-        reddit.read_only = True
+        if response.status_code == 404 and base_url == base_urls[0]:
+            continue
 
-        print("✅ Authentication successful")
+        if response.status_code in (401, 403):
+            print("❌ Unauthorized: invalid or expired SteadyAPI key.")
+            return False
 
-        print("\n📊 Testing API access (fetching r/Python)...")
-        subreddit = reddit.subreddit('Python')
+        if response.status_code >= 400:
+            print(f"❌ HTTP error {response.status_code}: {response.text[:200]}")
+            return False
 
-        # Try to get one post
-        for post in subreddit.hot(limit=1):
-            print(f"✅ Successfully fetched post: {post.title[:50]}...")
-            print(f"   Score: {post.score} | Comments: {post.num_comments}")
-            break
+        try:
+            data = response.json()
+        except ValueError as exc:
+            print(f"❌ Invalid JSON response: {exc}")
+            return False
 
+        children = []
+        if isinstance(data, dict):
+            if isinstance(data.get("data"), dict) and "children" in data["data"]:
+                children = data["data"]["children"]
+            elif "children" in data:
+                children = data["children"]
+        elif isinstance(data, list):
+            children = data
+
+        if not children:
+            print("⚠️ No posts returned. Check subreddit name or filters.")
+            return False
+
+        post = children[0].get("data", children[0])
+        print(f"✅ Successfully fetched post: {post.get('title', '')[:60]}...")
+        print(f"   Score: {post.get('score', 0)} | Comments: {post.get('num_comments', 0)}")
         print("\n" + "=" * 70)
         print("✅ ALL TESTS PASSED!")
         print("=" * 70)
-        print("\n✨ Your Reddit API credentials are working correctly!")
-        print("   You can now use the Streamlit app.\n")
-
         return True
 
-    except praw.exceptions.ResponseException as e:
-        print("\n" + "=" * 70)
-        print("❌ REDDIT API ERROR")
-        print("=" * 70)
-        print(f"\nError: {e}")
-        print("\nThis usually means:")
-        print("  1. Your Client ID or Client Secret is incorrect")
-        print("  2. Your Reddit app type is wrong (must be 'script')")
-        print("  3. Your Reddit app was deleted or disabled")
-
-        print("\n🔧 How to fix:")
-        print("  1. Go to: https://www.reddit.com/prefs/apps")
-        print("  2. Find your app or create a new one")
-        print("  3. Make sure 'app type' is set to 'script'")
-        print("  4. Copy the Client ID (under your app name)")
-        print("  5. Copy the Client Secret (the 'secret' field)")
-        print("  6. Update your Streamlit secrets\n")
-
-        return False
-
-    except Exception as e:
-        print("\n" + "=" * 70)
-        print("❌ UNEXPECTED ERROR")
-        print("=" * 70)
-        print(f"\nError: {type(e).__name__}: {e}")
-        print("\nPlease check:")
-        print("  1. Your internet connection")
-        print("  2. Reddit.com is accessible")
-        print("  3. Your credentials are correct\n")
-
-        return False
+    print(f"❌ SteadyAPI request failed. {last_error or ''}")
+    return False
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("\n" + "=" * 70)
-    print("Reddit API Credential Tester")
+    print("SteadyAPI Credential Tester")
     print("=" * 70)
-    print("\nThis script will test your Reddit API credentials.")
+    print("\nThis script will test your SteadyAPI key.")
     print("You can test in two ways:\n")
-    print("1. Using Streamlit secrets (for Streamlit Cloud)")
-    print("2. Using .env file (for local development)")
-    print("3. Manual input")
+    print("1. Using STEADYAPI_KEY from your environment")
+    print("2. Manual input")
 
-    choice = input("\nEnter your choice (1/2/3): ").strip()
+    choice = input("\nEnter your choice (1/2): ").strip()
 
-    if choice == '1':
-        try:
-            import streamlit as st
-            client_id = st.secrets['REDDIT_CLIENT_ID']
-            client_secret = st.secrets['REDDIT_CLIENT_SECRET']
-            user_agent = st.secrets.get('REDDIT_USER_AGENT', 'RedditScraperBot/1.0')
-            print("\n✅ Loaded credentials from Streamlit secrets")
-        except Exception as e:
-            print(f"\n❌ Could not load Streamlit secrets: {e}")
-            print("Make sure you're running this from a Streamlit app")
+    if choice == "1":
+        api_key = os.getenv("STEADYAPI_KEY")
+        if not api_key:
+            print("\n❌ Missing STEADYAPI_KEY in environment.")
             sys.exit(1)
-
-    elif choice == '2':
-        try:
-            from dotenv import load_dotenv
-            import os
-            load_dotenv()
-            client_id = os.getenv('REDDIT_CLIENT_ID')
-            client_secret = os.getenv('REDDIT_CLIENT_SECRET')
-            user_agent = os.getenv('REDDIT_USER_AGENT', 'RedditScraperBot/1.0')
-
-            if not client_id or not client_secret:
-                print("\n❌ Missing credentials in .env file")
-                sys.exit(1)
-            print("\n✅ Loaded credentials from .env file")
-        except Exception as e:
-            print(f"\n❌ Could not load .env file: {e}")
-            sys.exit(1)
-
+        print("\n✅ Loaded STEADYAPI_KEY from environment")
     else:
-        print("\nEnter your Reddit API credentials:")
-        client_id = input("Client ID: ").strip()
-        client_secret = input("Client Secret: ").strip()
-        user_agent = input("User Agent (or press Enter for default): ").strip() or "RedditScraperBot/1.0"
+        api_key = input("\nEnter your SteadyAPI key: ").strip()
 
-    # Run the test
-    test_reddit_credentials(client_id, client_secret, user_agent)
+    test_steadyapi_key(api_key)

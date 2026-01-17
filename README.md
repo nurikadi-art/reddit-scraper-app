@@ -29,8 +29,8 @@ A powerful web application that scrapes viral Reddit posts and automatically gen
 ## 📋 Prerequisites
 
 - Python 3.7+
-- Reddit API credentials (already configured in `.env`)
-- Anthropic API key (already configured in `.env`)
+- SteadyAPI key (configured in `.env`)
+- Anthropic API key (configured in `.env`)
 
 ## 🏁 Quick Start
 
@@ -214,7 +214,7 @@ Lower to 50 for more posts, raise to 500 for ultra-viral content only.
 
 ## 💰 Cost Estimate
 
-- **Reddit API**: Free
+- **SteadyAPI**: Based on your plan
 - **Anthropic API**:
   - ~$0.03-0.05 per script
   - 20 scripts = ~$0.60-1.00 per run
@@ -247,7 +247,7 @@ python app.py  # Edit app.py, change port in last line
 ### API Errors
 - Verify credentials in `.env` file
 - Check Anthropic account has credits
-- Ensure Reddit API app type is "script"
+- Ensure STEADYAPI_KEY is valid and active
 
 ## 🔒 Security Notes
 
