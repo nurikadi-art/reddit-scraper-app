@@ -13,6 +13,7 @@ from anthropic import Anthropic
 from datetime import datetime, timedelta
 from pathlib import Path
 import time
+import random
 
 # Page config
 st.set_page_config(
@@ -187,7 +188,7 @@ def fetch_reddit_posts_steadyapi(subreddit_name, limit=50, api_key=None):
     url = f"https://api.steadyapi.com/reddit/r/{subreddit_name}/hot"
 
     headers = {
-        'User-Agent': 'ViralScriptGenerator/1.0'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
 
     # Add API key if provided
@@ -259,11 +260,14 @@ def fetch_reddit_posts_public(subreddit_name, limit=50):
     """
     url = f"https://www.reddit.com/r/{subreddit_name}/hot.json"
     headers = {
-        'User-Agent': 'ViralScriptGenerator/1.0'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
     params = {
         'limit': min(limit, 100)
     }
+
+    # Add small random delay to avoid rate limiting
+    time.sleep(random.uniform(1.0, 2.5))
 
     try:
         with httpx.Client(timeout=30) as client:
@@ -313,15 +317,17 @@ def fetch_reddit_comments(subreddit_name, post_id, limit=10, api_key=None):
     if api_key:
         url = f"https://api.steadyapi.com/reddit/r/{subreddit_name}/comments/{post_id}"
         headers = {
-            'User-Agent': 'ViralScriptGenerator/1.0',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'X-API-KEY': api_key
         }
     else:
         # Fall back to public Reddit JSON
         url = f"https://www.reddit.com/r/{subreddit_name}/comments/{post_id}.json"
         headers = {
-            'User-Agent': 'ViralScriptGenerator/1.0'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         }
+        # Add small random delay to avoid rate limiting
+        time.sleep(random.uniform(0.8, 2.0))
 
     params = {
         'limit': limit
@@ -403,8 +409,8 @@ def get_viral_posts(subreddit_name, limit=20, hours_limit=72, min_upvotes=100, t
         if len(posts) >= limit:
             break
 
-        # Be nice to servers
-        time.sleep(0.3)
+        # Be nice to servers - random delay to avoid rate limiting
+        time.sleep(random.uniform(1.0, 2.0))
 
     return posts
 
@@ -426,7 +432,7 @@ def get_viral_comments(subreddit_name, post_id, post_type='discussion', limit=5,
         if len(quality_comments) >= limit:
             break
 
-    time.sleep(0.3)  # Be nice to servers
+    time.sleep(random.uniform(0.5, 1.5))  # Be nice to servers - avoid rate limiting
     return quality_comments
 
 
