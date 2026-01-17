@@ -330,6 +330,7 @@ def build_scrapecreators_url(base_url: str, path: str) -> str:
     def get_viral_comments(
         self,
         post_id: str,
+        post_url: Optional[str] = None,
         subreddit_name: Optional[str] = None,
         post_type: str = "discussion",
         limit: int = 10,
@@ -345,6 +346,13 @@ def build_scrapecreators_url(base_url: str, path: str) -> str:
         Returns:
             List of comment dictionaries
         """
+        if not post_url and subreddit_name and post_id:
+            post_url = f"https://www.reddit.com/r/{subreddit_name}/comments/{post_id}/"
+
+        if not post_url:
+            print(f"  ⚠️ Comment fetch failed for {post_id}: missing post URL")
+            return []
+
         path_candidates = build_path_candidates(
             "SCRAPECREATORS_REDDIT_COMMENTS_PATHS",
             DEFAULT_COMMENT_PATHS,
@@ -354,7 +362,7 @@ def build_scrapecreators_url(base_url: str, path: str) -> str:
         try:
             data = self._scrapecreators_get(
                 path_candidates,
-                {"post_id": post_id, "id": post_id, "limit": limit},
+                {"url": post_url, "limit": limit},
             )
         except Exception as exc:
             print(f"  ⚠️ Comment fetch failed for {post_id}: {exc}")
@@ -519,6 +527,7 @@ Here are the posts:
                 for post in posts:
                     comments = self.get_viral_comments(
                         post["id"],
+                        post_url=post.get("permalink") or post.get("url"),
                         subreddit_name=post.get("subreddit"),
                         post_type=post.get("post_type", "discussion"),
                         limit=comments_per_post,

@@ -174,6 +174,7 @@ def run_scraper_background(category, posts_per_sub, target_count=20):
                 for post in posts:
                     comments = scraper.get_viral_comments(
                         post['id'],
+                        post_url=post.get('permalink') or post.get('url'),
                         subreddit_name=subreddit,
                         post_type=post.get('post_type', 'discussion'),
                         limit=5

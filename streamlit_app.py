@@ -344,19 +344,20 @@ def fetch_reddit_posts_scrapecreators(
 
 
 def fetch_reddit_comments_scrapecreators(
-    subreddit_name: str, post_id: str, limit: int, api_key: str
+    subreddit_name: str, post_url: str, limit: int, api_key: str
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Fetch top comments via ScrapeCreators."""
+    if not post_url:
+        return [], {"attempts": [], "paths": [], "error": "Missing post URL for comments."}
     params = {
-        "post_id": post_id,
-        "id": post_id,
+        "url": post_url,
         "limit": limit,
     }
     paths = build_path_candidates(
         "SCRAPECREATORS_REDDIT_COMMENTS_PATHS",
         DEFAULT_COMMENT_PATHS,
         subreddit=subreddit_name,
-        post_id=post_id,
+        post_id="",
     )
     data, debug = scrapecreators_get(paths, params, api_key)
 
@@ -586,8 +587,11 @@ if generate_button:
         debug_entries.append(debug_info)
 
         for post in found:
+            comment_url = post.get("permalink") or post.get("url")
+            if comment_url and comment_url.startswith("/"):
+                comment_url = f"https://reddit.com{comment_url}"
             comments, comment_debug = fetch_reddit_comments_scrapecreators(
-                sub, post["id"], limit=5, api_key=scrapecreators_key
+                sub, comment_url, limit=5, api_key=scrapecreators_key
             )
             post["top_comments"] = comments
             if debug_mode and comment_debug.get("error"):
