@@ -44,7 +44,7 @@ def test_scrapecreators_key(api_key: str, subreddit: str = "Python") -> bool:
     if override:
         base_urls = [part.strip() for part in override.split(",") if part.strip()]
     else:
-        base_urls = ["https://api.scrapecreators.com/v1", "https://api.scrapecreators.com"]
+        base_urls = ["https://api.scrapecreators.com"]
     headers = {
         "Authorization": f"Bearer {api_key}",
         "X-API-KEY": api_key,
@@ -66,10 +66,15 @@ def test_scrapecreators_key(api_key: str, subreddit: str = "Python") -> bool:
     last_error = None
     for path in paths:
         for base_url in base_urls:
-            base_url = base_url.rstrip("/")
-            if base_url.endswith("/v1") and path.startswith("/v1/"):
-                continue
-            url = f"{base_url}{path}"
+            base = base_url.rstrip("/")
+            adjusted_path = path
+            has_base_v1 = base.endswith("/v1")
+            has_path_v1 = adjusted_path.startswith("/v1/")
+            if has_base_v1 and has_path_v1:
+                adjusted_path = adjusted_path[len("/v1") :]
+            elif not has_base_v1 and not has_path_v1:
+                adjusted_path = f"/v1{adjusted_path}"
+            url = f"{base}{adjusted_path}"
             try:
                 response = httpx.get(url, headers=headers, params=params, timeout=30)
             except Exception as exc:

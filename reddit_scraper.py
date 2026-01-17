@@ -64,7 +64,7 @@ def get_scrapecreators_base_urls() -> tuple:
     if override:
         parts = [part.strip() for part in override.split(",") if part.strip()]
         return tuple(parts)
-    return ("https://api.scrapecreators.com/v1", "https://api.scrapecreators.com")
+    return ("https://api.scrapecreators.com",)
 
 
 SCRAPECREATORS_BASE_URLS = get_scrapecreators_base_urls()
@@ -158,6 +158,18 @@ class RedditScraper:
         if post_id not in self.scraped_posts["post_ids"]:
             self.scraped_posts["post_ids"].append(post_id)
 
+def build_scrapecreators_url(base_url: str, path: str) -> str:
+    """Ensure exactly one /v1 segment between base and path."""
+    base = base_url.rstrip("/")
+    has_base_v1 = base.endswith("/v1")
+    has_path_v1 = path.startswith("/v1/")
+    if has_base_v1 and has_path_v1:
+        path = path[len("/v1") :]
+    elif not has_base_v1 and not has_path_v1:
+        path = f"/v1{path}"
+    return f"{base}{path}"
+
+
     def _scrapecreators_get(self, paths: Any, params: Dict[str, Any]) -> Any:
         """Fetch data from ScrapeCreators with endpoint fallback."""
         headers = {
@@ -172,10 +184,7 @@ class RedditScraper:
 
         for path in path_list:
             for base_url in SCRAPECREATORS_BASE_URLS:
-                base_url = base_url.rstrip("/")
-                if base_url.endswith("/v1") and path.startswith("/v1/"):
-                    continue
-                url = f"{base_url}{path}"
+                url = build_scrapecreators_url(base_url, path)
                 try:
                     with httpx.Client(timeout=SCRAPECREATORS_TIMEOUT) as client:
                         response = client.get(url, headers=headers, params=params)
