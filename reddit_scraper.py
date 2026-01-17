@@ -120,6 +120,18 @@ def extract_children(data: Any) -> List[Dict[str, Any]]:
     return []
 
 
+def build_scrapecreators_url(base_url: str, path: str) -> str:
+    """Ensure exactly one /v1 segment between base and path."""
+    base = base_url.rstrip("/")
+    has_base_v1 = base.endswith("/v1")
+    has_path_v1 = path.startswith("/v1/")
+    if has_base_v1 and has_path_v1:
+        path = path[len("/v1") :]
+    elif not has_base_v1 and not has_path_v1:
+        path = f"/v1{path}"
+    return f"{base}{path}"
+
+
 class RedditScraper:
     def __init__(self, tracking_file: str = "scraped_posts.json"):
         """Initialize ScrapeCreators and Anthropic clients."""
@@ -157,18 +169,6 @@ class RedditScraper:
         """Mark a post as scraped."""
         if post_id not in self.scraped_posts["post_ids"]:
             self.scraped_posts["post_ids"].append(post_id)
-
-def build_scrapecreators_url(base_url: str, path: str) -> str:
-    """Ensure exactly one /v1 segment between base and path."""
-    base = base_url.rstrip("/")
-    has_base_v1 = base.endswith("/v1")
-    has_path_v1 = path.startswith("/v1/")
-    if has_base_v1 and has_path_v1:
-        path = path[len("/v1") :]
-    elif not has_base_v1 and not has_path_v1:
-        path = f"/v1{path}"
-    return f"{base}{path}"
-
 
     def _scrapecreators_get(self, paths: Any, params: Dict[str, Any]) -> Any:
         """Fetch data from ScrapeCreators with endpoint fallback."""
