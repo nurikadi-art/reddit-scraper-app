@@ -26,21 +26,33 @@ st.set_page_config(
 
 # Categorized subreddits
 SUBREDDIT_CATEGORIES = {
-    "B2B_Business": {
-        "subreddits": ["SaaS", "Entrepreneur", "Startups", "Sales", "SideHustle"],
-        "description": 'Best for "How I Built This" or "Money" scripts',
+    "B2B_News_Sales": {
+        "subreddits": ["sales", "B2BMarketing", "Entrepreneur", "smallbusiness", "startups"],
+        "description": "Sales strategies, B2B marketing, and business news",
     },
-    "Marketing_Growth": {
-        "subreddits": ["Marketing", "SocialMedia", "Copywriting", "SEO"],
-        "description": 'Best for "Growth Hack" scripts',
+    "Marketing_Social_Media": {
+        "subreddits": ["marketing", "socialmedia", "digitalmarketing", "InstagramMarketing", "NewTubers", "SEO"],
+        "description": "Marketing tactics, social media growth, and SEO",
     },
-    "Hot_Takes": {
-        "subreddits": ["UnpopularOpinion", "ChangeMyView", "ShowerThoughts", "ExplainLikeImFive"],
-        "description": "Best for engagement bait and educational content",
+    "AI_News": {
+        "subreddits": ["artificial", "OpenAI", "MachineLearning", "Singularity", "ChatGPT"],
+        "description": "AI developments, research, and industry news",
     },
-    "Viral_General": {
-        "subreddits": ["Futurology", "Productivity", "InternetIsBeautiful"],
-        "description": "Broad appeal topics",
+    "Remote_Work_Productivity": {
+        "subreddits": ["remotework", "digitalnomad", "productivity", "GetDisciplined"],
+        "description": "Remote work tips, productivity systems, and discipline",
+    },
+    "Fitness": {
+        "subreddits": ["Fitness", "bodyweightfitness", "weightroom", "loseit", "nutrition"],
+        "description": "Workout programs, diet, and health optimization",
+    },
+    "Personal_Growth": {
+        "subreddits": ["selfimprovement", "DecidingToBeBetter", "personalfinance", "LifeProTips", "Meditation"],
+        "description": "Self-improvement, financial literacy, and mindfulness",
+    },
+    "Legacy_Categories": {
+        "subreddits": ["SaaS", "Copywriting", "SideHustle", "UnpopularOpinion", "ChangeMyView", "ShowerThoughts", "ExplainLikeImFive", "Futurology", "InternetIsBeautiful"],
+        "description": "Original curated subreddits (legacy)",
     },
 }
 
@@ -563,6 +575,45 @@ def generate_script(anthropic_client: Anthropic, post: Dict[str, Any]) -> str:
     return message.content[0].text
 
 
+def generate_more_hooks(anthropic_client: Anthropic, post: Dict[str, Any], num_hooks: int = 5) -> str:
+    """Generate additional hook variations for a post."""
+    content = post.get("selftext", "")[:1000] if post.get("selftext") else "Link post - see URL"
+
+    hooks_prompt = f"""You are an expert social media copywriter. Generate {num_hooks} different scroll-stopping hooks for this viral Reddit post.
+
+REDDIT POST:
+Title: {post["title"]}
+Subreddit: r/{post["subreddit"]}
+Upvotes: {post["score"]}
+Post URL: {post.get("permalink", post.get("url", "https://reddit.com"))}
+
+Content: {content}
+
+Requirements:
+- Each hook must be 1-2 lines maximum
+- Designed to stop the scroll instantly
+- Use controversy, curiosity, or bold claims
+- Make people NEED to read more
+- Vary the style (question, bold statement, contrarian take, shocking stat, etc.)
+
+Output Format:
+Hook 1:
+[First hook]
+
+Hook 2:
+[Second hook]
+
+...and so on for all {num_hooks} hooks.
+"""
+
+    message = anthropic_client.messages.create(
+        model="claude-sonnet-4-5-20250929",
+        max_tokens=2000,
+        messages=[{"role": "user", "content": hooks_prompt}],
+    )
+    return message.content[0].text
+
+
 st.title("🎬 Viral Script Generator")
 st.markdown("**Generate viral Reels/Shorts scripts from Reddit using the Phenomenon formula**")
 st.info("✨ **Powered by ScrapeCreators API** for reliable Reddit data access")
@@ -570,21 +621,53 @@ st.info("✨ **Powered by ScrapeCreators API** for reliable Reddit data access")
 # Sidebar
 with st.sidebar:
     st.header("⚙️ Configuration")
+
+    # Category selection
     category = st.selectbox(
         "Content Category",
         options=list(SUBREDDIT_CATEGORIES.keys()),
-        format_func=lambda x: x.replace("_", " & "),
+        format_func=lambda x: x.replace("_", " ").title(),
     )
 
     st.info(
-        f"**{SUBREDDIT_CATEGORIES[category]['description']}**\n\n"
-        f"Subreddits: {', '.join(SUBREDDIT_CATEGORIES[category]['subreddits'])}"
+        f"**{SUBREDDIT_CATEGORIES[category]['description']}**"
     )
 
-    target_count = st.number_input("Scripts to Generate", 1, 50, 5)
-    posts_per_sub = st.number_input("Posts per Subreddit", 1, 100, 10)
-    min_upvotes = st.number_input("Minimum Upvotes", 0, 5000, 100)
-    hours_limit = st.number_input("Hours Back", 1, 168, 72)
+    # Subreddit selection
+    use_custom_selection = st.checkbox("🎯 Select specific subreddits", value=False)
+
+    if use_custom_selection:
+        selected_subreddits = st.multiselect(
+            "Choose subreddits",
+            options=SUBREDDIT_CATEGORIES[category]['subreddits'],
+            default=SUBREDDIT_CATEGORIES[category]['subreddits'][:3],
+            help="Select which subreddits to scrape from"
+        )
+    else:
+        selected_subreddits = SUBREDDIT_CATEGORIES[category]['subreddits']
+        st.caption(f"✓ Using all {len(selected_subreddits)} subreddits from category")
+
+    st.divider()
+
+    # Scraping options
+    scrape_mode = st.radio(
+        "Scraping Mode",
+        options=["Limited", "All Viral Posts"],
+        help="Limited: Set max posts per subreddit | All: Scrape everything that matches filters"
+    )
+
+    if scrape_mode == "Limited":
+        target_count = st.number_input("Max Scripts to Generate", 1, 100, 10)
+        posts_per_sub = st.number_input("Max Posts per Subreddit", 1, 100, 20)
+    else:
+        st.warning("⚠️ Will scrape ALL viral posts matching your filters (may take a while)")
+        target_count = 999999  # Effectively unlimited
+        posts_per_sub = 100  # Max allowed by API per request
+
+    min_upvotes = st.number_input("Minimum Upvotes", 0, 10000, 100)
+    hours_limit = st.number_input("Hours Back", 1, 720, 72)
+
+    st.divider()
     debug_mode = st.checkbox("Show ScrapeCreators debug details", value=False)
 
     st.divider()
@@ -605,8 +688,12 @@ if generate_button:
         scripts_gen_metric = st.empty()
 
     all_posts: List[Dict[str, Any]] = []
-    subreddits = SUBREDDIT_CATEGORIES[category]["subreddits"]
+    subreddits = selected_subreddits if selected_subreddits else SUBREDDIT_CATEGORIES[category]["subreddits"]
     debug_entries: List[Dict[str, Any]] = []
+
+    if not subreddits:
+        st.error("❌ No subreddits selected. Please select at least one subreddit.")
+        st.stop()
 
     # 1. Fetching Phase
     for sub in subreddits:
@@ -663,6 +750,7 @@ if generate_button:
                     "subreddit": post["subreddit"],
                     "url": post["permalink"],
                     "script": script,
+                    "post_data": post,  # Store full post data for regeneration
                 }
             )
 
@@ -673,28 +761,73 @@ if generate_button:
         st.success(f"✅ Generated {len(generated_scripts)} scripts!")
         save_tracking(tracking_data)
 
-        for i, data in enumerate(generated_scripts, 1):
-            with st.expander(f"Script {i}: {data['title']}", expanded=(i == 1)):
-                st.markdown(data["script"])
-                st.markdown(f"[View Original Post]({data['url']})")
+        # Store in session state for regeneration
+        st.session_state.generated_scripts = generated_scripts
+        st.session_state.anthropic_client = anthropic
 
-    if debug_mode:
-        with st.expander("🧪 ScrapeCreators Debug Details", expanded=False):
-            summary_rows = []
-            for entry in debug_entries:
-                filters = entry.get("filters", {})
-                fetch_error = entry.get("fetch", {}).get("error") if entry.get("fetch") else None
-                summary_rows.append(
-                    {
-                        "subreddit": entry.get("subreddit"),
-                        "raw_posts": filters.get("total_raw"),
-                        "kept_posts": filters.get("kept"),
-                        "low_score": filters.get("low_score"),
-                        "too_old": filters.get("too_old"),
-                        "duplicates": filters.get("duplicate"),
-                        "missing_id": filters.get("missing_id"),
-                        "fetch_error": fetch_error or "",
-                    }
-                )
-            st.dataframe(summary_rows, use_container_width=True)
-            st.json(debug_entries)
+# Display generated scripts (whether just generated or from session state)
+if "generated_scripts" in st.session_state and st.session_state.generated_scripts:
+    st.divider()
+    st.header("📝 Generated Scripts")
+
+    for i, data in enumerate(st.session_state.generated_scripts, 1):
+        with st.expander(f"Script {i}: {data['title']}", expanded=(i == 1)):
+            # Display the script
+            script_key = f"script_{i}"
+            if script_key not in st.session_state:
+                st.session_state[script_key] = data["script"]
+
+            st.markdown(st.session_state[script_key])
+            st.markdown(f"**Source:** r/{data['subreddit']} | [View Original Post]({data['url']})")
+
+            # Action buttons
+            col1, col2 = st.columns(2)
+
+            with col1:
+                if st.button(f"🔄 Rewrite Script", key=f"rewrite_{i}", use_container_width=True):
+                    with st.spinner("Regenerating script..."):
+                        try:
+                            new_script = generate_script(
+                                st.session_state.anthropic_client,
+                                data["post_data"]
+                            )
+                            st.session_state[script_key] = new_script
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"❌ Regeneration failed: {exc}")
+
+            with col2:
+                if st.button(f"✨ Generate 5 More Hooks", key=f"hooks_{i}", use_container_width=True):
+                    with st.spinner("Generating additional hooks..."):
+                        try:
+                            hooks = generate_more_hooks(
+                                st.session_state.anthropic_client,
+                                data["post_data"],
+                                num_hooks=5
+                            )
+                            st.success("🎯 Additional Hooks Generated!")
+                            st.markdown("---")
+                            st.markdown(hooks)
+                        except Exception as exc:
+                            st.error(f"❌ Hook generation failed: {exc}")
+
+        if debug_mode:
+            with st.expander("🧪 ScrapeCreators Debug Details", expanded=False):
+                summary_rows = []
+                for entry in debug_entries:
+                    filters = entry.get("filters", {})
+                    fetch_error = entry.get("fetch", {}).get("error") if entry.get("fetch") else None
+                    summary_rows.append(
+                        {
+                            "subreddit": entry.get("subreddit"),
+                            "raw_posts": filters.get("total_raw"),
+                            "kept_posts": filters.get("kept"),
+                            "low_score": filters.get("low_score"),
+                            "too_old": filters.get("too_old"),
+                            "duplicates": filters.get("duplicate"),
+                            "missing_id": filters.get("missing_id"),
+                            "fetch_error": fetch_error or "",
+                        }
+                    )
+                st.dataframe(summary_rows, use_container_width=True)
+                st.json(debug_entries)
