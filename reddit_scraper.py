@@ -173,8 +173,7 @@ def build_scrapecreators_url(base_url: str, path: str) -> str:
     def _scrapecreators_get(self, paths: Any, params: Dict[str, Any]) -> Any:
         """Fetch data from ScrapeCreators with endpoint fallback."""
         headers = {
-            "Authorization": f"Bearer {self.scrapecreators_key}",
-            "X-API-KEY": self.scrapecreators_key,
+            "x-api-key": self.scrapecreators_key,
             "Accept": "application/json",
             "User-Agent": "ViralScriptGen/2.1",
         }
@@ -235,7 +234,7 @@ def build_scrapecreators_url(base_url: str, path: str) -> str:
             data = self._scrapecreators_get(
                 paths,
                 {
-                    "subreddit": subreddit_name,
+                    "subreddit": subreddit_name.lower(),
                     "sort": os.getenv("SCRAPECREATORS_REDDIT_SORT", "hot"),
                     "limit": min(limit * 2, MAX_SCRAPECREATORS_LIMIT),
                 },
@@ -355,7 +354,7 @@ def build_scrapecreators_url(base_url: str, path: str) -> str:
         try:
             data = self._scrapecreators_get(
                 path_candidates,
-                {"post_id": post_id, "limit": limit},
+                {"post_id": post_id, "id": post_id, "limit": limit},
             )
         except Exception as exc:
             print(f"  ⚠️ Comment fetch failed for {post_id}: {exc}")

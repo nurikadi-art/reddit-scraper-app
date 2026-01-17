@@ -256,8 +256,7 @@ def scrapecreators_get(paths: Any, params: Dict[str, Any], api_key: str) -> Tupl
     """Fetch data from ScrapeCreators with endpoint fallback and debug details."""
     path_list = [paths] if isinstance(paths, str) else list(paths)
     headers = {
-        "Authorization": f"Bearer {api_key}",
-        "X-API-KEY": api_key,
+        "x-api-key": api_key,
         "Accept": "application/json",
         "User-Agent": "ViralScriptGen/2.1",
     }
@@ -330,7 +329,7 @@ def fetch_reddit_posts_scrapecreators(
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Fetch raw posts using ScrapeCreators."""
     params = {
-        "subreddit": subreddit_name,
+        "subreddit": subreddit_name.lower(),
         "sort": os.getenv("SCRAPECREATORS_REDDIT_SORT", "hot"),
         "limit": min(limit, MAX_SCRAPECREATORS_LIMIT),
     }
@@ -350,6 +349,7 @@ def fetch_reddit_comments_scrapecreators(
     """Fetch top comments via ScrapeCreators."""
     params = {
         "post_id": post_id,
+        "id": post_id,
         "limit": limit,
     }
     paths = build_path_candidates(

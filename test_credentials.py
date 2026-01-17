@@ -46,13 +46,12 @@ def test_scrapecreators_key(api_key: str, subreddit: str = "Python") -> bool:
     else:
         base_urls = ["https://api.scrapecreators.com"]
     headers = {
-        "Authorization": f"Bearer {api_key}",
-        "X-API-KEY": api_key,
+        "x-api-key": api_key,
         "Accept": "application/json",
         "User-Agent": "ScrapeCreatorsTest/1.0",
     }
     params = {
-        "subreddit": subreddit,
+        "subreddit": subreddit.lower(),
         "sort": os.getenv("SCRAPECREATORS_REDDIT_SORT", "hot"),
         "limit": 1,
     }
