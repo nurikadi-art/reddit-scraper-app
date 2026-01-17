@@ -108,10 +108,14 @@ MAX_SCRAPECREATORS_LIMIT = 100
 DEFAULT_HOT_PATHS = (
     "/reddit/subreddit",
     "/reddit/subreddit/",
+    "/v1/reddit/subreddit",
+    "/v1/reddit/subreddit/",
 )
 DEFAULT_COMMENT_PATHS = (
     "/reddit/post/comments",
     "/reddit/post/comments/",
+    "/v1/reddit/post/comments",
+    "/v1/reddit/post/comments/",
 )
 
 
@@ -121,7 +125,7 @@ def get_scrapecreators_base_urls() -> Tuple[str, ...]:
     if override:
         parts = [part.strip() for part in override.split(",") if part.strip()]
         return tuple(parts)
-    return ("https://api.scrapecreators.com/v1",)
+    return ("https://api.scrapecreators.com/v1", "https://api.scrapecreators.com")
 
 
 SCRAPECREATORS_BASE_URLS = get_scrapecreators_base_urls()
@@ -251,6 +255,9 @@ def scrapecreators_get(paths: Any, params: Dict[str, Any], api_key: str) -> Tupl
 
     for path in path_list:
         for base_url in SCRAPECREATORS_BASE_URLS:
+            base_url = base_url.rstrip("/")
+            if base_url.endswith("/v1") and path.startswith("/v1/"):
+                continue
             url = f"{base_url}{path}"
             try:
                 with httpx.Client(timeout=SCRAPECREATORS_TIMEOUT) as client:

@@ -12,6 +12,8 @@ import httpx
 DEFAULT_HOT_PATHS = (
     "/reddit/subreddit",
     "/reddit/subreddit/",
+    "/v1/reddit/subreddit",
+    "/v1/reddit/subreddit/",
 )
 
 
@@ -42,7 +44,7 @@ def test_scrapecreators_key(api_key: str, subreddit: str = "Python") -> bool:
     if override:
         base_urls = [part.strip() for part in override.split(",") if part.strip()]
     else:
-        base_urls = ["https://api.scrapecreators.com/v1"]
+        base_urls = ["https://api.scrapecreators.com/v1", "https://api.scrapecreators.com"]
     headers = {
         "Authorization": f"Bearer {api_key}",
         "X-API-KEY": api_key,
@@ -64,6 +66,9 @@ def test_scrapecreators_key(api_key: str, subreddit: str = "Python") -> bool:
     last_error = None
     for path in paths:
         for base_url in base_urls:
+            base_url = base_url.rstrip("/")
+            if base_url.endswith("/v1") and path.startswith("/v1/"):
+                continue
             url = f"{base_url}{path}"
             try:
                 response = httpx.get(url, headers=headers, params=params, timeout=30)
