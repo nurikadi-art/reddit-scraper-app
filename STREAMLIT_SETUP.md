@@ -42,10 +42,10 @@ This is the **CRITICAL STEP** that fixes your error!
 3. Copy and paste this into the secrets box:
 
 ```toml
-REDDIT_CLIENT_ID = "pC0n_Q_TCOWIqZWT5aq0Jg"
-REDDIT_CLIENT_SECRET = "gn0Z9AikvRkUdCyEfpcHqgFOEzNndQ"
+REDDIT_CLIENT_ID = "your_reddit_client_id_here"
+REDDIT_CLIENT_SECRET = "your_reddit_client_secret_here"
 REDDIT_USER_AGENT = "RedditScraperBot/1.0"
-ANTHROPIC_API_KEY = "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"
+ANTHROPIC_API_KEY = "your_anthropic_api_key_here"
 ```
 
 4. Click **"Save"**

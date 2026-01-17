@@ -26,7 +26,7 @@
 4. Paste this:
 
 ```toml
-ANTHROPIC_API_KEY = "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"
+ANTHROPIC_API_KEY = "your_anthropic_api_key_here"
 ```
 
 5. Click "Save"
