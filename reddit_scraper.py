@@ -45,17 +45,12 @@ SUBREDDIT_CATEGORIES = {
 SCRAPECREATORS_TIMEOUT = 30
 MAX_SCRAPECREATORS_LIMIT = 100
 DEFAULT_HOT_PATHS = (
-    "/reddit/r/{subreddit}/hot",
-    "/reddit/{subreddit}/hot",
-    "/reddit/r/{subreddit}/hot.json",
-    "/reddit/{subreddit}/hot.json",
-    "/reddit/subreddit/{subreddit}/hot",
+    "/reddit/subreddit",
+    "/reddit/subreddit/",
 )
 DEFAULT_COMMENT_PATHS = (
-    "/reddit/r/{subreddit}/comments/{post_id}",
-    "/reddit/comments/{post_id}",
-    "/reddit/r/{subreddit}/comments/{post_id}.json",
-    "/reddit/comments/{post_id}.json",
+    "/reddit/post/comments",
+    "/reddit/post/comments/",
 )
 
 
@@ -65,7 +60,7 @@ def get_scrapecreators_base_urls() -> tuple:
     if override:
         parts = [part.strip() for part in override.split(",") if part.strip()]
         return tuple(parts)
-    return ("https://api.scrapecreators.com",)
+    return ("https://api.scrapecreators.com/v1",)
 
 
 SCRAPECREATORS_BASE_URLS = get_scrapecreators_base_urls()
@@ -223,7 +218,11 @@ class RedditScraper:
             )
             data = self._scrapecreators_get(
                 paths,
-                {"limit": min(limit * 2, MAX_SCRAPECREATORS_LIMIT)},
+                {
+                    "subreddit": subreddit_name,
+                    "sort": os.getenv("SCRAPECREATORS_REDDIT_SORT", "hot"),
+                    "limit": min(limit * 2, MAX_SCRAPECREATORS_LIMIT),
+                },
             )
         except Exception as exc:
             print(f"  ⚠️ ScrapeCreators error for r/{subreddit_name}: {exc}")
@@ -247,7 +246,9 @@ class RedditScraper:
                 missing_id += 1
                 continue
 
-            created_utc = normalize_timestamp(post.get("created_utc") or post.get("created"))
+            created_utc = normalize_timestamp(
+                post.get("created_utc") or post.get("created") or post.get("created_at_iso")
+            )
             if created_utc is None:
                 missing_created += 1
                 created_utc = time.time()
@@ -260,7 +261,7 @@ class RedditScraper:
                 skipped_duplicate += 1
                 continue
 
-            score = int(post.get("score", 0) or 0)
+            score = int(post.get("score", post.get("ups", 0)) or 0)
             if score < min_upvotes:
                 skipped_low_score += 1
                 continue
@@ -336,7 +337,10 @@ class RedditScraper:
             post_id=post_id,
         )
         try:
-            data = self._scrapecreators_get(path_candidates, {"limit": limit})
+            data = self._scrapecreators_get(
+                path_candidates,
+                {"post_id": post_id, "limit": limit},
+            )
         except Exception as exc:
             print(f"  ⚠️ Comment fetch failed for {post_id}: {exc}")
             return []
@@ -344,38 +348,66 @@ class RedditScraper:
         comments: List[Dict[str, Any]] = []
         comment_listing: List[Dict[str, Any]] = []
 
-        if isinstance(data, list) and len(data) > 1:
-            comment_listing = data[1].get("data", {}).get("children", [])
-        elif isinstance(data, dict):
-            comment_listing = data.get("data", {}).get("children", [])
+        if isinstance(data, dict) and isinstance(data.get("comments"), list):
+            comment_listing = data.get("comments", [])
+            for comment in comment_listing:
+                body = comment.get("body", "")
+                if len(body) <= 20:
+                    continue
 
-        for child in comment_listing[: limit * 2]:
-            if child.get("kind") != "t1":
-                continue
-            comment = child.get("data", {})
-            body = comment.get("body", "")
-            if len(body) <= 20:
-                continue
+                is_quality = True
+                if post_type == "question":
+                    is_quality = len(body) > 100
 
-            is_quality = True
-            if post_type == "question":
-                is_quality = len(body) > 100
+                if is_quality:
+                    comments.append(
+                        {
+                            "author": comment.get("author", "[deleted]"),
+                            "body": body,
+                            "score": comment.get("score", comment.get("ups", 0)),
+                            "created_utc": datetime.fromtimestamp(
+                                normalize_timestamp(comment.get("created_utc") or comment.get("created_at_iso"))
+                                or time.time()
+                            ).strftime("%Y-%m-%d %H:%M:%S"),
+                            "length": len(body),
+                        }
+                    )
 
-            if is_quality:
-                comments.append(
-                    {
-                        "author": comment.get("author", "[deleted]"),
-                        "body": body,
-                        "score": comment.get("score", 0),
-                        "created_utc": datetime.fromtimestamp(
-                            normalize_timestamp(comment.get("created_utc")) or time.time()
-                        ).strftime("%Y-%m-%d %H:%M:%S"),
-                        "length": len(body),
-                    }
-                )
+                if len(comments) >= limit:
+                    break
+        else:
+            if isinstance(data, list) and len(data) > 1:
+                comment_listing = data[1].get("data", {}).get("children", [])
+            elif isinstance(data, dict):
+                comment_listing = data.get("data", {}).get("children", [])
 
-            if len(comments) >= limit:
-                break
+            for child in comment_listing[: limit * 2]:
+                if child.get("kind") != "t1":
+                    continue
+                comment = child.get("data", {})
+                body = comment.get("body", "")
+                if len(body) <= 20:
+                    continue
+
+                is_quality = True
+                if post_type == "question":
+                    is_quality = len(body) > 100
+
+                if is_quality:
+                    comments.append(
+                        {
+                            "author": comment.get("author", "[deleted]"),
+                            "body": body,
+                            "score": comment.get("score", 0),
+                            "created_utc": datetime.fromtimestamp(
+                                normalize_timestamp(comment.get("created_utc")) or time.time()
+                            ).strftime("%Y-%m-%d %H:%M:%S"),
+                            "length": len(body),
+                        }
+                    )
+
+                if len(comments) >= limit:
+                    break
 
         return comments
 

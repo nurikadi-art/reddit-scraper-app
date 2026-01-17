@@ -27,8 +27,9 @@ You can place this in:
 - The ScrapeCreators endpoint might be changing
 - Enable the debug panel in the Streamlit app to see request details
 - Override paths if needed:
-  - `SCRAPECREATORS_REDDIT_HOT_PATHS=/reddit/r/{subreddit}/hot,/reddit/{subreddit}/hot`
-  - `SCRAPECREATORS_REDDIT_COMMENTS_PATHS=/reddit/r/{subreddit}/comments/{post_id},/reddit/comments/{post_id}`
+  - `SCRAPECREATORS_REDDIT_HOT_PATHS=/reddit/subreddit`
+  - `SCRAPECREATORS_REDDIT_COMMENTS_PATHS=/reddit/post/comments`
+- If your base URL differs, set: `SCRAPECREATORS_BASE_URLS=https://api.scrapecreators.com/v1`
 
 ### No Posts Found
 - Lower the minimum upvotes

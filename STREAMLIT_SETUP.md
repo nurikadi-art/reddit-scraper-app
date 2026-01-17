@@ -105,8 +105,9 @@ The app will show:
 **Fix**:
 - Enable the debug panel in the app to see the exact URLs being called
 - Add path overrides in Streamlit Secrets:
-  - `SCRAPECREATORS_REDDIT_HOT_PATHS=/reddit/r/{subreddit}/hot,/reddit/{subreddit}/hot`
-  - `SCRAPECREATORS_REDDIT_COMMENTS_PATHS=/reddit/r/{subreddit}/comments/{post_id},/reddit/comments/{post_id}`
+  - `SCRAPECREATORS_REDDIT_HOT_PATHS=/reddit/subreddit`
+  - `SCRAPECREATORS_REDDIT_COMMENTS_PATHS=/reddit/post/comments`
+- If your base URL differs, set: `SCRAPECREATORS_BASE_URLS=https://api.scrapecreators.com/v1`
 
 ### Error: "Rate limit exceeded"
 

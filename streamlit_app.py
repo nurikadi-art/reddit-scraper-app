@@ -106,17 +106,12 @@ Call to Action:
 SCRAPECREATORS_TIMEOUT = 30
 MAX_SCRAPECREATORS_LIMIT = 100
 DEFAULT_HOT_PATHS = (
-    "/reddit/r/{subreddit}/hot",
-    "/reddit/{subreddit}/hot",
-    "/reddit/r/{subreddit}/hot.json",
-    "/reddit/{subreddit}/hot.json",
-    "/reddit/subreddit/{subreddit}/hot",
+    "/reddit/subreddit",
+    "/reddit/subreddit/",
 )
 DEFAULT_COMMENT_PATHS = (
-    "/reddit/r/{subreddit}/comments/{post_id}",
-    "/reddit/comments/{post_id}",
-    "/reddit/r/{subreddit}/comments/{post_id}.json",
-    "/reddit/comments/{post_id}.json",
+    "/reddit/post/comments",
+    "/reddit/post/comments/",
 )
 
 
@@ -126,7 +121,7 @@ def get_scrapecreators_base_urls() -> Tuple[str, ...]:
     if override:
         parts = [part.strip() for part in override.split(",") if part.strip()]
         return tuple(parts)
-    return ("https://api.scrapecreators.com",)
+    return ("https://api.scrapecreators.com/v1",)
 
 
 SCRAPECREATORS_BASE_URLS = get_scrapecreators_base_urls()
@@ -318,7 +313,11 @@ def fetch_reddit_posts_scrapecreators(
     subreddit_name: str, limit: int, api_key: str
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Fetch raw posts using ScrapeCreators."""
-    params = {"limit": min(limit, MAX_SCRAPECREATORS_LIMIT)}
+    params = {
+        "subreddit": subreddit_name,
+        "sort": os.getenv("SCRAPECREATORS_REDDIT_SORT", "hot"),
+        "limit": min(limit, MAX_SCRAPECREATORS_LIMIT),
+    }
     paths = build_path_candidates(
         "SCRAPECREATORS_REDDIT_HOT_PATHS",
         DEFAULT_HOT_PATHS,
@@ -333,7 +332,10 @@ def fetch_reddit_comments_scrapecreators(
     subreddit_name: str, post_id: str, limit: int, api_key: str
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Fetch top comments via ScrapeCreators."""
-    params = {"limit": limit}
+    params = {
+        "post_id": post_id,
+        "limit": limit,
+    }
     paths = build_path_candidates(
         "SCRAPECREATORS_REDDIT_COMMENTS_PATHS",
         DEFAULT_COMMENT_PATHS,
@@ -344,24 +346,40 @@ def fetch_reddit_comments_scrapecreators(
 
     comments: List[Dict[str, Any]] = []
     comment_listing: List[Dict[str, Any]] = []
-    if isinstance(data, list) and len(data) > 1:
-        comment_listing = data[1].get("data", {}).get("children", [])
-    elif isinstance(data, dict):
-        comment_listing = data.get("data", {}).get("children", [])
+    if isinstance(data, dict) and isinstance(data.get("comments"), list):
+        comment_listing = data.get("comments", [])
+        for comment in comment_listing:
+            body = comment.get("body")
+            if not body:
+                continue
+            comments.append(
+                {
+                    "author": comment.get("author", "[deleted]"),
+                    "body": body,
+                    "score": comment.get("score", comment.get("ups", 0)),
+                }
+            )
+            if len(comments) >= limit:
+                break
+    else:
+        if isinstance(data, list) and len(data) > 1:
+            comment_listing = data[1].get("data", {}).get("children", [])
+        elif isinstance(data, dict):
+            comment_listing = data.get("data", {}).get("children", [])
 
-    for child in comment_listing:
-        if child.get("kind") == "t1":
-            comment = child.get("data", {})
-            if comment.get("body"):
-                comments.append(
-                    {
-                        "author": comment.get("author", "[deleted]"),
-                        "body": comment["body"],
-                        "score": comment.get("score", 0),
-                    }
-                )
-        if len(comments) >= limit:
-            break
+        for child in comment_listing:
+            if child.get("kind") == "t1":
+                comment = child.get("data", {})
+                if comment.get("body"):
+                    comments.append(
+                        {
+                            "author": comment.get("author", "[deleted]"),
+                            "body": comment["body"],
+                            "score": comment.get("score", 0),
+                        }
+                    )
+            if len(comments) >= limit:
+                break
 
     return comments, debug
 
@@ -401,7 +419,9 @@ def get_viral_posts(
             filters["missing_id"] += 1
             continue
 
-        created_utc = normalize_timestamp(post.get("created_utc") or post.get("created"))
+        created_utc = normalize_timestamp(
+            post.get("created_utc") or post.get("created") or post.get("created_at_iso")
+        )
         if created_utc is None:
             filters["missing_created_utc"] += 1
             created_utc = time.time()
@@ -414,7 +434,7 @@ def get_viral_posts(
             filters["duplicate"] += 1
             continue
 
-        score = int(post.get("score", 0) or 0)
+        score = int(post.get("score", post.get("ups", 0)) or 0)
         if score < min_upvotes:
             filters["low_score"] += 1
             continue

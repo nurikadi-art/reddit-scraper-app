@@ -62,7 +62,7 @@ SCRAPECREATORS_API_KEY = "your_scrapecreators_api_key_here"
 Instead of using PRAW (which requires Reddit authentication), the app uses:
 
 ```
-https://api.scrapecreators.com/reddit/r/{subreddit}/hot
+https://api.scrapecreators.com/v1/reddit/subreddit?subreddit={subreddit}&sort=hot&limit=50
 ```
 
 **Advantages:**
@@ -208,8 +208,9 @@ Best for: Broad appeal topics
 - **Cause**: ScrapeCreators request failed or subreddit is private/banned
 - **Fix**: Verify SCRAPECREATORS_API_KEY and check app debug panel for details
   - If you see HTTP 404, set endpoint overrides:
-    - `SCRAPECREATORS_REDDIT_HOT_PATHS=/reddit/r/{subreddit}/hot,/reddit/{subreddit}/hot`
-    - `SCRAPECREATORS_REDDIT_COMMENTS_PATHS=/reddit/r/{subreddit}/comments/{post_id},/reddit/comments/{post_id}`
+    - `SCRAPECREATORS_REDDIT_HOT_PATHS=/reddit/subreddit`
+    - `SCRAPECREATORS_REDDIT_COMMENTS_PATHS=/reddit/post/comments`
+  - If your base URL differs, set: `SCRAPECREATORS_BASE_URLS=https://api.scrapecreators.com/v1`
 
 ### API error from Anthropic
 - **Cause**: Invalid API key or no credits

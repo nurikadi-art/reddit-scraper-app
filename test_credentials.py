@@ -10,11 +10,8 @@ import sys
 import httpx
 
 DEFAULT_HOT_PATHS = (
-    "/reddit/r/{subreddit}/hot",
-    "/reddit/{subreddit}/hot",
-    "/reddit/r/{subreddit}/hot.json",
-    "/reddit/{subreddit}/hot.json",
-    "/reddit/subreddit/{subreddit}/hot",
+    "/reddit/subreddit",
+    "/reddit/subreddit/",
 )
 
 
@@ -45,14 +42,18 @@ def test_scrapecreators_key(api_key: str, subreddit: str = "Python") -> bool:
     if override:
         base_urls = [part.strip() for part in override.split(",") if part.strip()]
     else:
-        base_urls = ["https://api.scrapecreators.com"]
+        base_urls = ["https://api.scrapecreators.com/v1"]
     headers = {
         "Authorization": f"Bearer {api_key}",
         "X-API-KEY": api_key,
         "Accept": "application/json",
         "User-Agent": "ScrapeCreatorsTest/1.0",
     }
-    params = {"limit": 1}
+    params = {
+        "subreddit": subreddit,
+        "sort": os.getenv("SCRAPECREATORS_REDDIT_SORT", "hot"),
+        "limit": 1,
+    }
 
     paths = build_path_candidates(
         "SCRAPECREATORS_REDDIT_HOT_PATHS",
