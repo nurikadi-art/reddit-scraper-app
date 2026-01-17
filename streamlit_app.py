@@ -110,17 +110,26 @@ def get_credentials():
             'reddit_user_agent': st.secrets.get('REDDIT_USER_AGENT', 'RedditScraperBot/1.0'),
             'anthropic_api_key': st.secrets['ANTHROPIC_API_KEY']
         }
-    except (KeyError, FileNotFoundError):
+    except (KeyError, FileNotFoundError) as e:
         # Fall back to environment variables (for local development)
-        from dotenv import load_dotenv
-        load_dotenv()
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
 
-        return {
-            'reddit_client_id': os.getenv('REDDIT_CLIENT_ID'),
-            'reddit_client_secret': os.getenv('REDDIT_CLIENT_SECRET'),
-            'reddit_user_agent': os.getenv('REDDIT_USER_AGENT', 'RedditScraperBot/1.0'),
-            'anthropic_api_key': os.getenv('ANTHROPIC_API_KEY')
-        }
+            return {
+                'reddit_client_id': os.getenv('REDDIT_CLIENT_ID'),
+                'reddit_client_secret': os.getenv('REDDIT_CLIENT_SECRET'),
+                'reddit_user_agent': os.getenv('REDDIT_USER_AGENT', 'RedditScraperBot/1.0'),
+                'anthropic_api_key': os.getenv('ANTHROPIC_API_KEY')
+            }
+        except Exception:
+            # If both methods fail, return None values
+            return {
+                'reddit_client_id': None,
+                'reddit_client_secret': None,
+                'reddit_user_agent': 'RedditScraperBot/1.0',
+                'anthropic_api_key': None
+            }
 
 
 def init_clients():
@@ -129,18 +138,67 @@ def init_clients():
 
     # Validate credentials
     if not all([creds['reddit_client_id'], creds['reddit_client_secret'], creds['anthropic_api_key']]):
-        st.error("❌ Missing API credentials! Please configure secrets in Streamlit Cloud or .env file locally.")
+        st.error("❌ **Missing API credentials!**")
+        st.markdown("""
+        **Please configure your API credentials:**
+
+        **On Streamlit Cloud:**
+        1. Click "⚙️ Manage app" (bottom right)
+        2. Go to Settings → Secrets
+        3. Add your credentials in TOML format
+        4. Click "Save"
+
+        **See `REDDIT_API_SETUP.md` for detailed instructions.**
+        """)
         st.stop()
 
-    reddit = praw.Reddit(
-        client_id=creds['reddit_client_id'],
-        client_secret=creds['reddit_client_secret'],
-        user_agent=creds['reddit_user_agent']
-    )
+    try:
+        reddit = praw.Reddit(
+            client_id=creds['reddit_client_id'],
+            client_secret=creds['reddit_client_secret'],
+            user_agent=creds['reddit_user_agent']
+        )
 
-    anthropic = Anthropic(api_key=creds['anthropic_api_key'])
+        # Test the connection by forcing authentication
+        reddit.read_only = True
 
-    return reddit, anthropic
+        # Try to access Reddit API to verify credentials
+        try:
+            # This will trigger OAuth and validate credentials
+            list(reddit.subreddit('Python').hot(limit=1))
+        except praw.exceptions.ResponseException as e:
+            st.error("❌ **Reddit API Authentication Failed (500 Error)**")
+            st.markdown("""
+            **This error means your Reddit credentials are incorrect or your app type is wrong.**
+
+            **Common causes:**
+            - ❌ Client ID or Client Secret is wrong
+            - ❌ Your Reddit app type is NOT "script" (it must be "script", not "web app")
+            - ❌ The Reddit app was deleted or disabled
+
+            **How to fix:**
+            1. Go to: https://www.reddit.com/prefs/apps
+            2. Find your app - it MUST say **"personal use script"** under the name
+            3. If it doesn't, create a NEW app with type "script"
+            4. Copy the correct Client ID and Client Secret
+            5. Update your Streamlit secrets
+            6. Restart the app
+
+            **📖 Detailed guide:** See `REDDIT_API_SETUP.md` in the repository
+
+            **🧪 Test your credentials:** Run `python test_credentials.py` locally
+            """)
+            st.error(f"Technical details: {e}")
+            st.stop()
+
+        anthropic = Anthropic(api_key=creds['anthropic_api_key'])
+
+        return reddit, anthropic
+
+    except Exception as e:
+        st.error(f"❌ **Error initializing API clients:** {type(e).__name__}")
+        st.exception(e)
+        st.stop()
 
 
 def load_tracking():
