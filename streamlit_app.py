@@ -653,14 +653,15 @@ with st.sidebar:
     scrape_mode = st.radio(
         "Scraping Mode",
         options=["Limited", "All Viral Posts"],
-        help="Limited: Set max posts per subreddit | All: Scrape everything that matches filters"
+        help="Limited: Set custom limits | All: Scrape from ALL subreddits in the timeframe"
     )
 
     if scrape_mode == "Limited":
         target_count = st.number_input("Max Scripts to Generate", 1, 100, 10)
         posts_per_sub = st.number_input("Max Posts per Subreddit", 1, 100, 20)
     else:
-        st.warning("⚠️ Will scrape ALL viral posts matching your filters (may take a while)")
+        st.warning("⚠️ **All Viral Posts Mode:** Will scrape ALL posts from ALL selected subreddits within your timeframe (may generate 50+ scripts)")
+        st.caption("Note: API limit is 100 posts per subreddit per request, but all subreddits will be scraped")
         target_count = 999999  # Effectively unlimited
         posts_per_sub = 100  # Max allowed by API per request
 
