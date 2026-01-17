@@ -12,7 +12,7 @@ This guide shows you how to deploy the Viral Script Generator on Streamlit Cloud
 ## 📋 Prerequisites
 
 You already have:
-- ✅ SteadyAPI key (https://steadyapi.com/)
+- ✅ ScrapeCreators API key (https://scrapecreators.com/)
 - ✅ Anthropic API key
 - ✅ GitHub repository with the code
 
@@ -42,7 +42,7 @@ This is the **CRITICAL STEP** that fixes your error!
 3. Copy and paste this into the secrets box:
 
 ```toml
-STEADYAPI_KEY = "your_steadyapi_key_here"
+SCRAPECREATORS_API_KEY = "your_scrapecreators_api_key_here"
 ANTHROPIC_API_KEY = "your_anthropic_api_key_here"
 ```
 
@@ -86,7 +86,7 @@ The app will show:
 1. Go to your app on Streamlit Cloud
 2. Click "⚙️ Manage app" (bottom right)
 3. Click "⚙️ Settings" → "Secrets"
-4. Add your credentials (STEADYAPI_KEY + ANTHROPIC_API_KEY)
+4. Add your credentials (SCRAPECREATORS_API_KEY + ANTHROPIC_API_KEY)
 5. Click "Save"
 
 ### Error: "No viral posts found"
@@ -98,24 +98,24 @@ The app will show:
 - Try a different category
 - Run at a different time (Reddit activity varies)
 
-### Error: "HTTP 404 from SteadyAPI"
+### Error: "HTTP 404 from ScrapeCreators"
 
-**Cause**: SteadyAPI endpoint path mismatch
+**Cause**: ScrapeCreators endpoint path mismatch
 
 **Fix**:
 - Enable the debug panel in the app to see the exact URLs being called
 - Add path overrides in Streamlit Secrets:
-  - `STEADYAPI_REDDIT_HOT_PATHS=/reddit/r/{subreddit}/hot,/reddit/{subreddit}/hot`
-  - `STEADYAPI_REDDIT_COMMENTS_PATHS=/reddit/r/{subreddit}/comments/{post_id},/reddit/comments/{post_id}`
+  - `SCRAPECREATORS_REDDIT_HOT_PATHS=/reddit/r/{subreddit}/hot,/reddit/{subreddit}/hot`
+  - `SCRAPECREATORS_REDDIT_COMMENTS_PATHS=/reddit/r/{subreddit}/comments/{post_id},/reddit/comments/{post_id}`
 
 ### Error: "Rate limit exceeded"
 
-**Cause**: SteadyAPI rate limits for your plan
+**Cause**: ScrapeCreators rate limits for your plan
 
 **Fix**:
 - Reduce "Posts per Subreddit"
 - Wait a few minutes before trying again
-- Upgrade your SteadyAPI plan if needed
+- Upgrade your ScrapeCreators plan if needed
 
 ### App is slow
 
@@ -145,7 +145,7 @@ The app will show:
 ## 💰 Cost Estimate (Streamlit Cloud)
 
 - **Streamlit Hosting**: FREE
-- **SteadyAPI**: Based on your plan
+- **ScrapeCreators**: Based on your plan
 - **Anthropic API**: Pay-per-use
   - ~$0.03-0.05 per script
   - 20 scripts = ~$0.60-1.00
@@ -228,7 +228,7 @@ Containing 20 scripts with:
 1. Secrets are configured correctly (Step 3)
 2. API credentials are valid
 3. Anthropic account has credits
-4. SteadyAPI key is active and not expired
+4. ScrapeCreators API key is active and not expired
 
 ### Still Stuck?
 

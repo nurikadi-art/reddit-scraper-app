@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Reddit Viral Content Scraper with AI Analysis
-Fetches viral posts and comments from Reddit via SteadyAPI and analyzes them with Anthropic Claude
+Fetches viral posts and comments from Reddit via ScrapeCreators and analyzes them with Anthropic Claude
 Focuses on B2B, Marketing, Hot Takes, and Viral content for script generation
 """
 
@@ -42,9 +42,8 @@ SUBREDDIT_CATEGORIES = {
     },
 }
 
-STEADYAPI_BASE_URLS = ("https://api.steadyapi.com/v1", "https://api.steadyapi.com")
-STEADYAPI_TIMEOUT = 30
-MAX_STEADYAPI_LIMIT = 100
+SCRAPECREATORS_TIMEOUT = 30
+MAX_SCRAPECREATORS_LIMIT = 100
 DEFAULT_HOT_PATHS = (
     "/reddit/r/{subreddit}/hot",
     "/reddit/{subreddit}/hot",
@@ -60,8 +59,20 @@ DEFAULT_COMMENT_PATHS = (
 )
 
 
+def get_scrapecreators_base_urls() -> tuple:
+    """Get ScrapeCreators base URLs from environment or defaults."""
+    override = os.getenv("SCRAPECREATORS_BASE_URLS") or os.getenv("SCRAPECREATORS_BASE_URL")
+    if override:
+        parts = [part.strip() for part in override.split(",") if part.strip()]
+        return tuple(parts)
+    return ("https://api.scrapecreators.com",)
+
+
+SCRAPECREATORS_BASE_URLS = get_scrapecreators_base_urls()
+
+
 def build_path_candidates(env_key: str, default_paths: tuple, **kwargs: str) -> List[str]:
-    """Build SteadyAPI path candidates with optional env override."""
+    """Build ScrapeCreators path candidates with optional env override."""
     override = os.getenv(env_key, "")
     if override:
         templates = [item.strip() for item in override.split(",") if item.strip()]
@@ -71,7 +82,7 @@ def build_path_candidates(env_key: str, default_paths: tuple, **kwargs: str) -> 
 
 
 def normalize_timestamp(value: Any) -> Optional[float]:
-    """Normalize timestamps from SteadyAPI into epoch seconds."""
+    """Normalize timestamps from ScrapeCreators into epoch seconds."""
     if value is None:
         return None
     if isinstance(value, (int, float)):
@@ -93,7 +104,7 @@ def normalize_timestamp(value: Any) -> Optional[float]:
 
 
 def extract_children(data: Any) -> List[Dict[str, Any]]:
-    """Extract Reddit children list from SteadyAPI response formats."""
+    """Extract Reddit children list from ScrapeCreators response formats."""
     if isinstance(data, dict):
         if isinstance(data.get("data"), dict) and "children" in data["data"]:
             return data["data"]["children"]
@@ -112,11 +123,11 @@ def extract_children(data: Any) -> List[Dict[str, Any]]:
 
 class RedditScraper:
     def __init__(self, tracking_file: str = "scraped_posts.json"):
-        """Initialize SteadyAPI and Anthropic clients."""
-        steadyapi_key = os.getenv("STEADYAPI_KEY")
-        if not steadyapi_key:
-            raise ValueError("Missing STEADYAPI_KEY. Set it in your environment or secrets.")
-        self.steadyapi_key = steadyapi_key
+        """Initialize ScrapeCreators and Anthropic clients."""
+        scrapecreators_key = os.getenv("SCRAPECREATORS_API_KEY")
+        if not scrapecreators_key:
+            raise ValueError("Missing SCRAPECREATORS_API_KEY. Set it in your environment or secrets.")
+        self.scrapecreators_key = scrapecreators_key
 
         anthropic_key = os.getenv("ANTHROPIC_API_KEY")
         if not anthropic_key:
@@ -148,11 +159,11 @@ class RedditScraper:
         if post_id not in self.scraped_posts["post_ids"]:
             self.scraped_posts["post_ids"].append(post_id)
 
-    def _steadyapi_get(self, paths: Any, params: Dict[str, Any]) -> Any:
-        """Fetch data from SteadyAPI with endpoint fallback."""
+    def _scrapecreators_get(self, paths: Any, params: Dict[str, Any]) -> Any:
+        """Fetch data from ScrapeCreators with endpoint fallback."""
         headers = {
-            "Authorization": f"Bearer {self.steadyapi_key}",
-            "X-API-KEY": self.steadyapi_key,
+            "Authorization": f"Bearer {self.scrapecreators_key}",
+            "X-API-KEY": self.scrapecreators_key,
             "Accept": "application/json",
             "User-Agent": "ViralScriptGen/2.1",
         }
@@ -161,31 +172,31 @@ class RedditScraper:
         path_list = [paths] if isinstance(paths, str) else list(paths)
 
         for path in path_list:
-            for base_url in STEADYAPI_BASE_URLS:
+            for base_url in SCRAPECREATORS_BASE_URLS:
                 url = f"{base_url}{path}"
                 try:
-                    with httpx.Client(timeout=STEADYAPI_TIMEOUT) as client:
+                    with httpx.Client(timeout=SCRAPECREATORS_TIMEOUT) as client:
                         response = client.get(url, headers=headers, params=params)
                 except Exception as exc:
                     last_error = f"Request failed: {exc}"
                     continue
 
                 if response.status_code in (401, 403):
-                    raise RuntimeError("SteadyAPI authentication failed (401/403).")
+                    raise RuntimeError("ScrapeCreators authentication failed (401/403).")
 
                 if response.status_code == 404:
                     continue
 
                 if response.status_code >= 400:
                     preview = response.text[:200]
-                    raise RuntimeError(f"SteadyAPI HTTP {response.status_code}: {preview}")
+                    raise RuntimeError(f"ScrapeCreators HTTP {response.status_code}: {preview}")
 
                 try:
                     return response.json()
                 except ValueError as exc:
-                    raise RuntimeError(f"Invalid JSON response from SteadyAPI: {exc}") from exc
+                    raise RuntimeError(f"Invalid JSON response from ScrapeCreators: {exc}") from exc
 
-        raise RuntimeError(last_error or "All SteadyAPI paths returned 404.")
+        raise RuntimeError(last_error or "All ScrapeCreators paths returned 404.")
 
     def get_viral_posts(self, subreddit_name: str, limit: int = 20, hours_limit: int = 72, min_upvotes: int = 50):
         """
@@ -206,16 +217,16 @@ class RedditScraper:
 
         try:
             paths = build_path_candidates(
-                "STEADYAPI_REDDIT_HOT_PATHS",
+                "SCRAPECREATORS_REDDIT_HOT_PATHS",
                 DEFAULT_HOT_PATHS,
                 subreddit=subreddit_name,
             )
-            data = self._steadyapi_get(
+            data = self._scrapecreators_get(
                 paths,
-                {"limit": min(limit * 2, MAX_STEADYAPI_LIMIT)},
+                {"limit": min(limit * 2, MAX_SCRAPECREATORS_LIMIT)},
             )
         except Exception as exc:
-            print(f"  ⚠️ SteadyAPI error for r/{subreddit_name}: {exc}")
+            print(f"  ⚠️ ScrapeCreators error for r/{subreddit_name}: {exc}")
             return []
 
         raw_posts = extract_children(data)
@@ -319,13 +330,13 @@ class RedditScraper:
             List of comment dictionaries
         """
         path_candidates = build_path_candidates(
-            "STEADYAPI_REDDIT_COMMENTS_PATHS",
+            "SCRAPECREATORS_REDDIT_COMMENTS_PATHS",
             DEFAULT_COMMENT_PATHS,
             subreddit=subreddit_name or "all",
             post_id=post_id,
         )
         try:
-            data = self._steadyapi_get(path_candidates, {"limit": limit})
+            data = self._scrapecreators_get(path_candidates, {"limit": limit})
         except Exception as exc:
             print(f"  ⚠️ Comment fetch failed for {post_id}: {exc}")
             return []
@@ -435,7 +446,7 @@ Here are the posts:
         Main function to scrape Reddit and analyze with AI.
         """
         print("=" * 70)
-        print("🚀 Reddit Viral Content Scraper with AI Analysis (SteadyAPI)")
+        print("🚀 Reddit Viral Content Scraper with AI Analysis (ScrapeCreators)")
         print("=" * 70)
 
         if subreddits is None and category:

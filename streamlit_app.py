@@ -2,7 +2,7 @@
 """
 Viral Script Generator - Streamlit App
 Generates viral Reels/Shorts scripts from Reddit posts using the Phenomenon formula.
-Uses SteadyAPI for Reddit data access.
+Uses ScrapeCreators API for Reddit data access.
 """
 
 import json
@@ -103,9 +103,8 @@ Call to Action:
 [A specific trigger for DM automation or engagement]
 """
 
-STEADYAPI_BASE_URLS = ("https://api.steadyapi.com/v1", "https://api.steadyapi.com")
-STEADYAPI_TIMEOUT = 30
-MAX_STEADYAPI_LIMIT = 100
+SCRAPECREATORS_TIMEOUT = 30
+MAX_SCRAPECREATORS_LIMIT = 100
 DEFAULT_HOT_PATHS = (
     "/reddit/r/{subreddit}/hot",
     "/reddit/{subreddit}/hot",
@@ -121,11 +120,23 @@ DEFAULT_COMMENT_PATHS = (
 )
 
 
+def get_scrapecreators_base_urls() -> Tuple[str, ...]:
+    """Get ScrapeCreators base URLs from environment or defaults."""
+    override = os.getenv("SCRAPECREATORS_BASE_URLS") or os.getenv("SCRAPECREATORS_BASE_URL")
+    if override:
+        parts = [part.strip() for part in override.split(",") if part.strip()]
+        return tuple(parts)
+    return ("https://api.scrapecreators.com",)
+
+
+SCRAPECREATORS_BASE_URLS = get_scrapecreators_base_urls()
+
+
 def get_api_keys() -> Dict[str, Optional[str]]:
     """Get API keys from Streamlit secrets or environment variables."""
     try:
         return {
-            "steadyapi_key": st.secrets.get("STEADYAPI_KEY"),
+            "scrapecreators_key": st.secrets.get("SCRAPECREATORS_API_KEY"),
             "anthropic_key": st.secrets.get("ANTHROPIC_API_KEY"),
         }
     except (KeyError, FileNotFoundError):
@@ -136,7 +147,7 @@ def get_api_keys() -> Dict[str, Optional[str]]:
         except Exception:
             pass
         return {
-            "steadyapi_key": os.getenv("STEADYAPI_KEY"),
+            "scrapecreators_key": os.getenv("SCRAPECREATORS_API_KEY"),
             "anthropic_key": os.getenv("ANTHROPIC_API_KEY"),
         }
 
@@ -150,9 +161,9 @@ def init_clients() -> Tuple[Anthropic, str]:
         st.info("Please add `ANTHROPIC_API_KEY` to your Secrets or environment.")
         st.stop()
 
-    if not keys["steadyapi_key"]:
-        st.error("❌ **Missing SteadyAPI Key!**")
-        st.info("Please add `STEADYAPI_KEY` to your Secrets or environment.")
+    if not keys["scrapecreators_key"]:
+        st.error("❌ **Missing ScrapeCreators API Key!**")
+        st.info("Please add `SCRAPECREATORS_API_KEY` to your Secrets or environment.")
         st.stop()
 
     try:
@@ -161,7 +172,7 @@ def init_clients() -> Tuple[Anthropic, str]:
         st.error(f"❌ **Error initializing Anthropic API:** {e}")
         st.stop()
 
-    return anthropic, keys["steadyapi_key"]
+    return anthropic, keys["scrapecreators_key"]
 
 
 def load_tracking() -> Dict[str, Any]:
@@ -181,7 +192,7 @@ def save_tracking(tracking_data: Dict[str, Any]) -> None:
 
 
 def normalize_timestamp(value: Any) -> Optional[float]:
-    """Normalize timestamps from SteadyAPI into epoch seconds."""
+    """Normalize timestamps from ScrapeCreators into epoch seconds."""
     if value is None:
         return None
     if isinstance(value, (int, float)):
@@ -203,7 +214,7 @@ def normalize_timestamp(value: Any) -> Optional[float]:
 
 
 def extract_children(data: Any) -> List[Dict[str, Any]]:
-    """Extract Reddit children list from SteadyAPI response formats."""
+    """Extract Reddit children list from ScrapeCreators response formats."""
     if isinstance(data, dict):
         if isinstance(data.get("data"), dict) and "children" in data["data"]:
             return data["data"]["children"]
@@ -221,7 +232,7 @@ def extract_children(data: Any) -> List[Dict[str, Any]]:
 
 
 def build_path_candidates(env_key: str, default_paths: Tuple[str, ...], **kwargs: str) -> List[str]:
-    """Build SteadyAPI path candidates with optional env override."""
+    """Build ScrapeCreators path candidates with optional env override."""
     override = os.getenv(env_key, "")
     if override:
         templates = [item.strip() for item in override.split(",") if item.strip()]
@@ -230,8 +241,8 @@ def build_path_candidates(env_key: str, default_paths: Tuple[str, ...], **kwargs
     return [template.format(**kwargs) for template in templates]
 
 
-def steadyapi_get(paths: Any, params: Dict[str, Any], api_key: str) -> Tuple[Optional[Any], Dict[str, Any]]:
-    """Fetch data from SteadyAPI with endpoint fallback and debug details."""
+def scrapecreators_get(paths: Any, params: Dict[str, Any], api_key: str) -> Tuple[Optional[Any], Dict[str, Any]]:
+    """Fetch data from ScrapeCreators with endpoint fallback and debug details."""
     path_list = [paths] if isinstance(paths, str) else list(paths)
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -244,10 +255,10 @@ def steadyapi_get(paths: Any, params: Dict[str, Any], api_key: str) -> Tuple[Opt
     last_error: Optional[str] = None
 
     for path in path_list:
-        for base_url in STEADYAPI_BASE_URLS:
+        for base_url in SCRAPECREATORS_BASE_URLS:
             url = f"{base_url}{path}"
             try:
-                with httpx.Client(timeout=STEADYAPI_TIMEOUT) as client:
+                with httpx.Client(timeout=SCRAPECREATORS_TIMEOUT) as client:
                     response = client.get(url, headers=headers, params=params)
             except Exception as exc:
                 attempts.append(
@@ -274,7 +285,7 @@ def steadyapi_get(paths: Any, params: Dict[str, Any], api_key: str) -> Tuple[Opt
                 return None, {
                     "attempts": attempts,
                     "paths": path_list,
-                    "error": "SteadyAPI authentication failed (401/403).",
+                    "error": "ScrapeCreators authentication failed (401/403).",
                 }
 
             if response.status_code == 404:
@@ -284,7 +295,7 @@ def steadyapi_get(paths: Any, params: Dict[str, Any], api_key: str) -> Tuple[Opt
                 return None, {
                     "attempts": attempts,
                     "paths": path_list,
-                    "error": f"HTTP {response.status_code} from SteadyAPI.",
+                    "error": f"HTTP {response.status_code} from ScrapeCreators.",
                 }
 
             try:
@@ -299,37 +310,37 @@ def steadyapi_get(paths: Any, params: Dict[str, Any], api_key: str) -> Tuple[Opt
     return None, {
         "attempts": attempts,
         "paths": path_list,
-        "error": last_error or "All SteadyAPI paths returned 404.",
+        "error": last_error or "All ScrapeCreators paths returned 404.",
     }
 
 
-def fetch_reddit_posts_steadyapi(
+def fetch_reddit_posts_scrapecreators(
     subreddit_name: str, limit: int, api_key: str
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    """Fetch raw posts using SteadyAPI."""
-    params = {"limit": min(limit, MAX_STEADYAPI_LIMIT)}
+    """Fetch raw posts using ScrapeCreators."""
+    params = {"limit": min(limit, MAX_SCRAPECREATORS_LIMIT)}
     paths = build_path_candidates(
-        "STEADYAPI_REDDIT_HOT_PATHS",
+        "SCRAPECREATORS_REDDIT_HOT_PATHS",
         DEFAULT_HOT_PATHS,
         subreddit=subreddit_name,
     )
-    data, debug = steadyapi_get(paths, params, api_key)
+    data, debug = scrapecreators_get(paths, params, api_key)
     posts = extract_children(data) if data is not None else []
     return posts, debug
 
 
-def fetch_reddit_comments_steadyapi(
+def fetch_reddit_comments_scrapecreators(
     subreddit_name: str, post_id: str, limit: int, api_key: str
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    """Fetch top comments via SteadyAPI."""
+    """Fetch top comments via ScrapeCreators."""
     params = {"limit": limit}
     paths = build_path_candidates(
-        "STEADYAPI_REDDIT_COMMENTS_PATHS",
+        "SCRAPECREATORS_REDDIT_COMMENTS_PATHS",
         DEFAULT_COMMENT_PATHS,
         subreddit=subreddit_name,
         post_id=post_id,
     )
-    data, debug = steadyapi_get(paths, params, api_key)
+    data, debug = scrapecreators_get(paths, params, api_key)
 
     comments: List[Dict[str, Any]] = []
     comment_listing: List[Dict[str, Any]] = []
@@ -367,7 +378,9 @@ def get_viral_posts(
     if tracking_data is None:
         tracking_data = {"post_ids": []}
 
-    raw_posts, fetch_debug = fetch_reddit_posts_steadyapi(subreddit_name, limit=limit, api_key=api_key)
+    raw_posts, fetch_debug = fetch_reddit_posts_scrapecreators(
+        subreddit_name, limit=limit, api_key=api_key
+    )
 
     cutoff_timestamp = (datetime.now() - timedelta(hours=hours_limit)).timestamp()
     filters = {
@@ -479,7 +492,7 @@ def generate_script(anthropic_client: Anthropic, post: Dict[str, Any]) -> str:
 
 st.title("🎬 Viral Script Generator")
 st.markdown("**Generate viral Reels/Shorts scripts from Reddit using the Phenomenon formula**")
-st.info("✨ **Powered by SteadyAPI** for reliable Reddit data access")
+st.info("✨ **Powered by ScrapeCreators API** for reliable Reddit data access")
 
 # Sidebar
 with st.sidebar:
@@ -499,14 +512,14 @@ with st.sidebar:
     posts_per_sub = st.number_input("Posts per Subreddit", 1, 100, 10)
     min_upvotes = st.number_input("Minimum Upvotes", 0, 5000, 100)
     hours_limit = st.number_input("Hours Back", 1, 168, 72)
-    debug_mode = st.checkbox("Show SteadyAPI debug details", value=False)
+    debug_mode = st.checkbox("Show ScrapeCreators debug details", value=False)
 
     st.divider()
     generate_button = st.button("🚀 Generate Scripts", type="primary", use_container_width=True)
 
 # Main Execution
 if generate_button:
-    anthropic, steady_key = init_clients()
+    anthropic, scrapecreators_key = init_clients()
     tracking_data = load_tracking()
 
     progress_bar = st.progress(0)
@@ -531,14 +544,14 @@ if generate_button:
             hours_limit=int(hours_limit),
             min_upvotes=int(min_upvotes),
             tracking_data=tracking_data,
-            api_key=steady_key,
+            api_key=scrapecreators_key,
         )
 
         debug_entries.append(debug_info)
 
         for post in found:
-            comments, comment_debug = fetch_reddit_comments_steadyapi(
-                sub, post["id"], limit=5, api_key=steady_key
+            comments, comment_debug = fetch_reddit_comments_scrapecreators(
+                sub, post["id"], limit=5, api_key=scrapecreators_key
             )
             post["top_comments"] = comments
             if debug_mode and comment_debug.get("error"):
@@ -556,7 +569,7 @@ if generate_button:
     if not all_posts:
         st.warning("No new viral posts found. Try lowering upvote threshold or hours back.")
         if not debug_mode:
-            st.info("Enable SteadyAPI debug details in the sidebar to see request diagnostics.")
+            st.info("Enable ScrapeCreators debug details in the sidebar to see request diagnostics.")
     else:
         # 2. Generation Phase
         generated_scripts: List[Dict[str, Any]] = []
@@ -590,7 +603,7 @@ if generate_button:
                 st.markdown(f"[View Original Post]({data['url']})")
 
     if debug_mode:
-        with st.expander("🧪 SteadyAPI Debug Details", expanded=False):
+        with st.expander("🧪 ScrapeCreators Debug Details", expanded=False):
             summary_rows = []
             for entry in debug_entries:
                 filters = entry.get("filters", {})

@@ -5,7 +5,7 @@
 ## ✨ What Changed
 
 **Before:** Required Reddit API credentials (complicated setup, Devvit migration issues)
-**Now:** Uses **SteadyAPI** for reliable Reddit data access (no Reddit app setup required)
+**Now:** Uses **ScrapeCreators API** for reliable Reddit data access (no Reddit app setup required)
 
 ## 🚀 Super Simple Setup (2 Minutes)
 
@@ -27,7 +27,7 @@
 
 ```toml
 ANTHROPIC_API_KEY = "your_anthropic_api_key_here"
-STEADYAPI_KEY = "your_steadyapi_key_here"
+SCRAPECREATORS_API_KEY = "your_scrapecreators_api_key_here"
 ```
 
 5. Click "Save"
@@ -44,25 +44,25 @@ STEADYAPI_KEY = "your_steadyapi_key_here"
 
 ## 🎯 Features
 
-- ✅ **No Reddit API app** - SteadyAPI handles Reddit access
-- ✅ **Only 2 API keys** - Anthropic + SteadyAPI
+- ✅ **No Reddit API app** - ScrapeCreators handles Reddit access
+- ✅ **Only 2 API keys** - Anthropic + ScrapeCreators
 - ✅ **Same viral formula** - 4 psychological pillars
 - ✅ **Real-time progress** - Watch scripts generate live
 - ✅ **72-hour fresh content** - Latest viral posts only
 - ✅ **No duplicates** - Automatic tracking
 - ✅ **Download JSON** - Export all scripts
-- ✅ **Debug panel** - Inspect SteadyAPI responses and filter counts
+- ✅ **Debug panel** - Inspect ScrapeCreators responses and filter counts
 
 ---
 
 ## 📊 How It Works
 
-### SteadyAPI
+### ScrapeCreators API
 
 Instead of using PRAW (which requires Reddit authentication), the app uses:
 
 ```
-https://api.steadyapi.com/v1/reddit/r/{subreddit}/hot
+https://api.scrapecreators.com/reddit/r/{subreddit}/hot
 ```
 
 **Advantages:**
@@ -81,7 +81,7 @@ https://api.steadyapi.com/v1/reddit/r/{subreddit}/hot
 
 ## 💰 Cost
 
-- **SteadyAPI**: Based on your plan at https://steadyapi.com/
+- **ScrapeCreators**: Based on your plan at https://scrapecreators.com/
 - **Anthropic API**: ~$0.03-0.05 per script
   - 20 scripts = ~$0.60-1.00
   - Daily use = ~$20-30/month
@@ -205,11 +205,11 @@ Best for: Broad appeal topics
 - **Fix**: Lower "Minimum Upvotes" to 50
 
 ### Error fetching subreddit
-- **Cause**: SteadyAPI request failed or subreddit is private/banned
-- **Fix**: Verify STEADYAPI_KEY and check app debug panel for details
+- **Cause**: ScrapeCreators request failed or subreddit is private/banned
+- **Fix**: Verify SCRAPECREATORS_API_KEY and check app debug panel for details
   - If you see HTTP 404, set endpoint overrides:
-    - `STEADYAPI_REDDIT_HOT_PATHS=/reddit/r/{subreddit}/hot,/reddit/{subreddit}/hot`
-    - `STEADYAPI_REDDIT_COMMENTS_PATHS=/reddit/r/{subreddit}/comments/{post_id},/reddit/comments/{post_id}`
+    - `SCRAPECREATORS_REDDIT_HOT_PATHS=/reddit/r/{subreddit}/hot,/reddit/{subreddit}/hot`
+    - `SCRAPECREATORS_REDDIT_COMMENTS_PATHS=/reddit/r/{subreddit}/comments/{post_id},/reddit/comments/{post_id}`
 
 ### API error from Anthropic
 - **Cause**: Invalid API key or no credits
@@ -221,7 +221,7 @@ Best for: Broad appeal topics
 
 - `streamlit_app.py` - Main Streamlit app (use this!)
 - `app.py` - Flask version (alternative)
-- `reddit_scraper.py` - SteadyAPI scraper (used by Flask app)
+- `reddit_scraper.py` - ScrapeCreators scraper (used by Flask app)
 - `.streamlit/secrets.toml.example` - Secrets template
 
 ---
@@ -238,9 +238,9 @@ If you were using the PRAW version:
 
 **New setup:**
 - ✅ Anthropic API Key
-- ✅ SteadyAPI Key
+- ✅ ScrapeCreators API Key
 
-**No Reddit API migration needed** - remove old Reddit secrets and add SteadyAPI.
+**No Reddit API migration needed** - remove old Reddit secrets and add ScrapeCreators.
 
 ---
 
@@ -249,7 +249,7 @@ If you were using the PRAW version:
 You're ready to generate viral scripts!
 
 **Remember:**
-- ✨ Anthropic + SteadyAPI keys required
+- ✨ Anthropic + ScrapeCreators keys required
 - 🚫 No Reddit API app setup
 - ⚡ Simpler, faster, more reliable
 

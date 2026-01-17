@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-SteadyAPI Credential Tester
-Use this to verify your SteadyAPI key is working
+ScrapeCreators Credential Tester
+Use this to verify your ScrapeCreators key is working
 """
 
 import os
@@ -19,7 +19,7 @@ DEFAULT_HOT_PATHS = (
 
 
 def build_path_candidates(env_key: str, default_paths: tuple, **kwargs: str):
-    """Build SteadyAPI path candidates with optional env override."""
+    """Build ScrapeCreators path candidates with optional env override."""
     override = os.getenv(env_key, "")
     if override:
         templates = [item.strip() for item in override.split(",") if item.strip()]
@@ -35,23 +35,27 @@ except Exception:
     pass
 
 
-def test_steadyapi_key(api_key: str, subreddit: str = "Python") -> bool:
-    """Test if SteadyAPI key is valid by fetching one post."""
+def test_scrapecreators_key(api_key: str, subreddit: str = "Python") -> bool:
+    """Test if ScrapeCreators key is valid by fetching one post."""
     print("=" * 70)
-    print("🔍 Testing SteadyAPI Key")
+    print("🔍 Testing ScrapeCreators Key")
     print("=" * 70)
 
-    base_urls = ["https://api.steadyapi.com/v1", "https://api.steadyapi.com"]
+    override = os.getenv("SCRAPECREATORS_BASE_URLS") or os.getenv("SCRAPECREATORS_BASE_URL")
+    if override:
+        base_urls = [part.strip() for part in override.split(",") if part.strip()]
+    else:
+        base_urls = ["https://api.scrapecreators.com"]
     headers = {
         "Authorization": f"Bearer {api_key}",
         "X-API-KEY": api_key,
         "Accept": "application/json",
-        "User-Agent": "SteadyAPITest/1.0",
+        "User-Agent": "ScrapeCreatorsTest/1.0",
     }
     params = {"limit": 1}
 
     paths = build_path_candidates(
-        "STEADYAPI_REDDIT_HOT_PATHS",
+        "SCRAPECREATORS_REDDIT_HOT_PATHS",
         DEFAULT_HOT_PATHS,
         subreddit=subreddit,
     )
@@ -73,7 +77,7 @@ def test_steadyapi_key(api_key: str, subreddit: str = "Python") -> bool:
                 continue
 
             if response.status_code in (401, 403):
-                print("❌ Unauthorized: invalid or expired SteadyAPI key.")
+                print("❌ Unauthorized: invalid or expired ScrapeCreators key.")
                 return False
 
             if response.status_code >= 400:
@@ -107,28 +111,28 @@ def test_steadyapi_key(api_key: str, subreddit: str = "Python") -> bool:
             print("=" * 70)
             return True
 
-    print(f"❌ SteadyAPI request failed. {last_error or 'All paths returned 404.'}")
+    print(f"❌ ScrapeCreators request failed. {last_error or 'All paths returned 404.'}")
     return False
 
 
 if __name__ == "__main__":
     print("\n" + "=" * 70)
-    print("SteadyAPI Credential Tester")
+    print("ScrapeCreators Credential Tester")
     print("=" * 70)
-    print("\nThis script will test your SteadyAPI key.")
+    print("\nThis script will test your ScrapeCreators key.")
     print("You can test in two ways:\n")
-    print("1. Using STEADYAPI_KEY from your environment")
+    print("1. Using SCRAPECREATORS_API_KEY from your environment")
     print("2. Manual input")
 
     choice = input("\nEnter your choice (1/2): ").strip()
 
     if choice == "1":
-        api_key = os.getenv("STEADYAPI_KEY")
+        api_key = os.getenv("SCRAPECREATORS_API_KEY")
         if not api_key:
-            print("\n❌ Missing STEADYAPI_KEY in environment.")
+            print("\n❌ Missing SCRAPECREATORS_API_KEY in environment.")
             sys.exit(1)
-        print("\n✅ Loaded STEADYAPI_KEY from environment")
+        print("\n✅ Loaded SCRAPECREATORS_API_KEY from environment")
     else:
-        api_key = input("\nEnter your SteadyAPI key: ").strip()
+        api_key = input("\nEnter your ScrapeCreators key: ").strip()
 
-    test_steadyapi_key(api_key)
+    test_scrapecreators_key(api_key)
