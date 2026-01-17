@@ -45,9 +45,14 @@ SUBREDDIT_CATEGORIES = {
 }
 
 # Viral formula prompt
-VIRAL_FORMULA_PROMPT = """Role: You are an expert social media scriptwriter specializing in viral Reels/Shorts. Your goal is to generate scripts that trigger algorithms and human psychology using the "Phenomenon" viral formula.
+VIRAL_FORMULA_PROMPT = """Role: You are an expert social media copywriter specializing in viral content for cold audiences. Your goal is to create scroll-stopping copy that triggers engagement using the "Phenomenon" viral formula.
 
-Task: Create a script/text for a Reel based on the following viral Reddit post.
+Task: Analyze this viral Reddit post and create multiple copy variations for social media.
+
+CRITICAL FRAMING RULE:
+- If the post is about someone's personal experience (e.g., "I made $100k", "I quit my job", news, or case study), you MUST frame the copy as: "Someone else did this - here are my thoughts" or "Here's what I learned from this" or "This person's story teaches us..."
+- NEVER present others' experiences as your own
+- Position yourself as analyzing/commenting on the story, not living it
 
 Strict Adherence to the Viral Formula - You must incorporate these 4 psychological pillars:
 
@@ -63,7 +68,7 @@ Strict Adherence to the Viral Formula - You must incorporate these 4 psychologic
 3. The "Common Enemy" Trigger:
    - Never blame the viewer. Take the responsibility off them.
    - Identify a "Common Enemy" (the system, society, myths, a specific industry, false gurus).
-   - Position the author as the viewer's ally against this brutal world/enemy.
+   - Position yourself as the viewer's ally against this brutal world/enemy.
    - Reason: This triggers a powerful "friend/ally" response in the paleocortex.
 
 4. The "Magic Pill" Effect:
@@ -71,12 +76,13 @@ Strict Adherence to the Viral Formula - You must incorporate these 4 psychologic
    - Avoid obvious, hard advice (e.g., "to lose weight, exercise for 6 months"). This is boring.
    - Offer a solution that feels like a "hack" or a button that solves the problem easily.
 
-Quality & Style Instructions (The "AI Tuning"):
+Quality & Style Instructions:
 
 - Maximum Value Density: The text must be so valuable that the viewer would be willing to pay $5 just to save it or send it to a friend. No "water" — only meat/insights.
 - Non-Obvious Insights: Do not write obvious things (e.g., "sleep more"). Provide "Wow" insights that articulate what people feel but haven't conceptualized.
 - NLP Modalities: Use words that trigger different perception channels (Visual, Auditory, Emotional/Kinesthetic) to hook different types of brains.
 - Structural Uniqueness: Do not use a repetitive sentence structure. Each paragraph must look different in form and rhythm to keep the reader's dopamine flowing. Do not look like a template.
+- Cold Audience Focus: Write for people who don't know you. Build credibility quickly. Make every word count.
 
 REDDIT POST DATA:
 Title: {title}
@@ -84,23 +90,44 @@ Subreddit: r/{subreddit}
 Type: {post_type}
 Upvotes: {score}
 Comments: {num_comments}
+Post URL: {post_url}
 
 Post Content:
 {content}
 
-Top Comments:
+Top Comments (High Upvotes Only):
 {comments}
 
 Output Format (STRICT):
 
-Visual Hook (0-3 sec):
-[A sharp visual or text description to stop the scroll]
+## POST ANALYSIS
+[2-3 sentences explaining what this post is about and WHY it went viral. What psychological triggers made people engage? Include the Reddit post URL for reference.]
 
-Main Script (Text Overlay/Speech):
-[Apply the formula above. Keep it under 60 seconds reading time. Use the 4 pillars: Controversy, Polarity, Common Enemy, Magic Pill]
+## HOOK VARIATIONS (1-2 lines each - designed to stop the scroll)
+Hook 1:
+[First hook variation]
 
-Call to Action:
-[A specific trigger for DM automation or engagement]
+Hook 2:
+[Second hook variation]
+
+Hook 3:
+[Third hook variation]
+
+## SCRIPT VARIATION 1 (~500 characters)
+[Short, punchy version. Get straight to the point. Use the 4 pillars: Controversy, Polarity, Common Enemy, Magic Pill. Perfect for quick attention spans.]
+
+## SCRIPT VARIATION 2 (~1200 characters)
+[Medium-length version. More depth and context while maintaining engagement. Still apply all 4 pillars. Add more insights and value.]
+
+## SCRIPT VARIATION 3 (~2000 characters)
+[Longer, most comprehensive version. Deep dive with maximum value. Full application of all 4 pillars. Rich with non-obvious insights and actionable takeaways.]
+
+IMPORTANT REMINDERS:
+- NO visual instructions or descriptions
+- Write as text-only social media copy
+- If using comments, ONLY reference insights from high-upvote comments
+- Apply the framing rule for experience/news posts
+- Each script must work as standalone copy for cold audiences
 """
 
 SCRAPECREATORS_TIMEOUT = 30
@@ -506,8 +533,16 @@ def generate_script(anthropic_client: Anthropic, post: Dict[str, Any]) -> str:
 
     comments_text = ""
     if post.get("top_comments"):
-        for i, comment in enumerate(post["top_comments"][:3], 1):
-            comments_text += f"\nComment {i} ({comment['score']} upvotes):\n{comment['body'][:300]}\n"
+        # Filter for high-upvote comments (score >= 10 or top 3 by score)
+        high_upvote_comments = sorted(
+            post["top_comments"],
+            key=lambda c: c.get("score", 0),
+            reverse=True
+        )[:3]
+
+        for i, comment in enumerate(high_upvote_comments, 1):
+            if comment.get("score", 0) > 0:  # Only include comments with positive upvotes
+                comments_text += f"\nComment {i} ({comment['score']} upvotes):\n{comment['body'][:300]}\n"
 
     prompt = VIRAL_FORMULA_PROMPT.format(
         title=post["title"],
@@ -515,13 +550,14 @@ def generate_script(anthropic_client: Anthropic, post: Dict[str, Any]) -> str:
         post_type=post.get("post_type", "discussion"),
         score=post["score"],
         num_comments=post["num_comments"],
+        post_url=post.get("permalink", post.get("url", "https://reddit.com")),
         content=content,
-        comments=comments_text or "No comments available",
+        comments=comments_text or "No high-upvote comments available",
     )
 
     message = anthropic_client.messages.create(
         model="claude-sonnet-4-5-20250929",
-        max_tokens=3000,
+        max_tokens=4500,
         messages=[{"role": "user", "content": prompt}],
     )
     return message.content[0].text
