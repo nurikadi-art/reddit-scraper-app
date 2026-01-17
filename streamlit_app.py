@@ -24,37 +24,29 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Categorized subreddits
-SUBREDDIT_CATEGORIES = {
-    "B2B_News_Sales": {
-        "subreddits": ["sales", "B2BMarketing", "Entrepreneur", "smallbusiness", "startups"],
-        "description": "Sales strategies, B2B marketing, and business news",
-    },
-    "Marketing_Social_Media": {
-        "subreddits": ["marketing", "socialmedia", "digitalmarketing", "InstagramMarketing", "NewTubers", "SEO"],
-        "description": "Marketing tactics, social media growth, and SEO",
-    },
-    "AI_News": {
-        "subreddits": ["artificial", "OpenAI", "MachineLearning", "Singularity", "ChatGPT"],
-        "description": "AI developments, research, and industry news",
-    },
-    "Remote_Work_Productivity": {
-        "subreddits": ["remotework", "digitalnomad", "productivity", "GetDisciplined"],
-        "description": "Remote work tips, productivity systems, and discipline",
-    },
-    "Fitness": {
-        "subreddits": ["Fitness", "bodyweightfitness", "weightroom", "loseit", "nutrition"],
-        "description": "Workout programs, diet, and health optimization",
-    },
-    "Personal_Growth": {
-        "subreddits": ["selfimprovement", "DecidingToBeBetter", "personalfinance", "LifeProTips", "Meditation"],
-        "description": "Self-improvement, financial literacy, and mindfulness",
-    },
-    "Legacy_Categories": {
-        "subreddits": ["SaaS", "Copywriting", "SideHustle", "UnpopularOpinion", "ChangeMyView", "ShowerThoughts", "ExplainLikeImFive", "Futurology", "InternetIsBeautiful"],
-        "description": "Original curated subreddits (legacy)",
-    },
+# All available subreddits organized by category
+ALL_SUBREDDITS = {
+    "🏢 B2B & Sales": ["sales", "B2BMarketing", "Entrepreneur", "smallbusiness", "startups"],
+    "📱 Marketing & Social": ["marketing", "socialmedia", "digitalmarketing", "InstagramMarketing", "NewTubers", "SEO"],
+    "🤖 AI & Tech": ["artificial", "OpenAI", "MachineLearning", "Singularity", "ChatGPT"],
+    "💼 Remote & Productivity": ["remotework", "digitalnomad", "productivity", "GetDisciplined"],
+    "💪 Fitness & Health": ["Fitness", "bodyweightfitness", "weightroom", "loseit", "nutrition"],
+    "🌱 Personal Growth": ["selfimprovement", "DecidingToBeBetter", "personalfinance", "LifeProTips", "Meditation"],
+    "🎯 Other": ["SaaS", "Copywriting", "SideHustle", "UnpopularOpinion", "ChangeMyView", "ShowerThoughts", "ExplainLikeImFive", "Futurology", "InternetIsBeautiful"],
 }
+
+# Flatten for easy access
+def get_all_subreddits_flat():
+    """Get flat list of all subreddits with category labels."""
+    subreddits = []
+    for category, subs in ALL_SUBREDDITS.items():
+        for sub in subs:
+            subreddits.append(f"{sub} ({category})")
+    return subreddits
+
+def extract_subreddit_name(formatted_name):
+    """Extract just the subreddit name from 'SubredditName (Category)' format."""
+    return formatted_name.split(" (")[0] if " (" in formatted_name else formatted_name
 
 # Viral formula prompt
 VIRAL_FORMULA_PROMPT = """Role: You are an expert social media copywriter specializing in viral content for cold audiences. Your goal is to create scroll-stopping copy that triggers engagement using the "Phenomenon" viral formula.
@@ -622,54 +614,66 @@ st.info("✨ **Powered by ScrapeCreators API** for reliable Reddit data access")
 with st.sidebar:
     st.header("⚙️ Configuration")
 
-    # Category selection
-    category = st.selectbox(
-        "Content Category",
-        options=list(SUBREDDIT_CATEGORIES.keys()),
-        format_func=lambda x: x.replace("_", " ").title(),
+    # Subreddit Selection
+    st.subheader("📂 Select Subreddits")
+
+    # Get default subreddits (AI & Tech as default)
+    default_subs = [f"{sub} (🤖 AI & Tech)" for sub in ALL_SUBREDDITS["🤖 AI & Tech"]]
+
+    selected_subreddits_formatted = st.multiselect(
+        "Choose which subreddits to scrape",
+        options=get_all_subreddits_flat(),
+        default=default_subs[:3],
+        help="Subreddits are organized by category. Select as many as you want!"
     )
 
-    st.info(
-        f"**{SUBREDDIT_CATEGORIES[category]['description']}**"
-    )
+    # Extract clean subreddit names
+    selected_subreddits = [extract_subreddit_name(s) for s in selected_subreddits_formatted]
 
-    # Subreddit selection
-    use_custom_selection = st.checkbox("🎯 Select specific subreddits", value=False)
-
-    if use_custom_selection:
-        selected_subreddits = st.multiselect(
-            "Choose subreddits",
-            options=SUBREDDIT_CATEGORIES[category]['subreddits'],
-            default=SUBREDDIT_CATEGORIES[category]['subreddits'][:3],
-            help="Select which subreddits to scrape from"
-        )
+    if selected_subreddits:
+        st.success(f"✓ {len(selected_subreddits)} subreddit{'s' if len(selected_subreddits) > 1 else ''} selected")
     else:
-        selected_subreddits = SUBREDDIT_CATEGORIES[category]['subreddits']
-        st.caption(f"✓ Using all {len(selected_subreddits)} subreddits from category")
+        st.warning("⚠️ Please select at least one subreddit")
 
     st.divider()
 
-    # Scraping options
-    scrape_mode = st.radio(
-        "Scraping Mode",
-        options=["Limited", "All Viral Posts"],
-        help="Limited: Set custom limits | All: Scrape from ALL subreddits in the timeframe"
+    # Scraping Mode
+    st.subheader("🎯 Scraping Mode")
+
+    scrape_all = st.toggle(
+        "Scrape ALL viral posts",
+        value=False,
+        help="When enabled: Scrapes all posts from selected subreddits (up to 100 per subreddit)"
     )
 
-    if scrape_mode == "Limited":
-        target_count = st.number_input("Max Scripts to Generate", 1, 100, 10)
-        posts_per_sub = st.number_input("Max Posts per Subreddit", 1, 100, 20)
+    if not scrape_all:
+        st.caption("📊 Limited Mode")
+        col1, col2 = st.columns(2)
+        with col1:
+            target_count = st.number_input("Max Scripts", 1, 100, 10, help="Total scripts to generate")
+        with col2:
+            posts_per_sub = st.number_input("Per Subreddit", 1, 100, 20, help="Posts per subreddit")
     else:
-        st.warning("⚠️ **All Viral Posts Mode:** Will scrape ALL posts from ALL selected subreddits within your timeframe (may generate 50+ scripts)")
-        st.caption("Note: API limit is 100 posts per subreddit per request, but all subreddits will be scraped")
-        target_count = 999999  # Effectively unlimited
-        posts_per_sub = 100  # Max allowed by API per request
-
-    min_upvotes = st.number_input("Minimum Upvotes", 0, 10000, 100)
-    hours_limit = st.number_input("Hours Back", 1, 720, 72)
+        st.info("🔥 Will scrape ALL posts from selected subreddits (may generate 100+ scripts)")
+        target_count = 999999
+        posts_per_sub = 100
 
     st.divider()
-    debug_mode = st.checkbox("Show ScrapeCreators debug details", value=False)
+
+    # Filters
+    st.subheader("🔍 Filters")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        min_upvotes = st.number_input("Min Upvotes", 0, 10000, 100, step=50)
+    with col2:
+        hours_limit = st.number_input("Hours Back", 1, 720, 72, step=12)
+
+    st.divider()
+
+    # Advanced
+    with st.expander("⚙️ Advanced"):
+        debug_mode = st.checkbox("Show debug details", value=False)
 
     st.divider()
     generate_button = st.button("🚀 Generate Scripts", type="primary", use_container_width=True)
@@ -689,15 +693,14 @@ if generate_button:
         scripts_gen_metric = st.empty()
 
     all_posts: List[Dict[str, Any]] = []
-    subreddits = selected_subreddits if selected_subreddits else SUBREDDIT_CATEGORIES[category]["subreddits"]
     debug_entries: List[Dict[str, Any]] = []
 
-    if not subreddits:
+    if not selected_subreddits:
         st.error("❌ No subreddits selected. Please select at least one subreddit.")
         st.stop()
 
     # 1. Fetching Phase
-    for sub in subreddits:
+    for sub in selected_subreddits:
         status_text.text(f"📊 Scanning r/{sub}...")
         found, debug_info = get_viral_posts(
             sub,
