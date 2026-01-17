@@ -9,6 +9,24 @@ import sys
 
 import httpx
 
+DEFAULT_HOT_PATHS = (
+    "/reddit/r/{subreddit}/hot",
+    "/reddit/{subreddit}/hot",
+    "/reddit/r/{subreddit}/hot.json",
+    "/reddit/{subreddit}/hot.json",
+    "/reddit/subreddit/{subreddit}/hot",
+)
+
+
+def build_path_candidates(env_key: str, default_paths: tuple, **kwargs: str):
+    """Build SteadyAPI path candidates with optional env override."""
+    override = os.getenv(env_key, "")
+    if override:
+        templates = [item.strip() for item in override.split(",") if item.strip()]
+    else:
+        templates = list(default_paths)
+    return [template.format(**kwargs) for template in templates]
+
 try:
     from dotenv import load_dotenv
 
@@ -32,57 +50,64 @@ def test_steadyapi_key(api_key: str, subreddit: str = "Python") -> bool:
     }
     params = {"limit": 1}
 
+    paths = build_path_candidates(
+        "STEADYAPI_REDDIT_HOT_PATHS",
+        DEFAULT_HOT_PATHS,
+        subreddit=subreddit,
+    )
+
     last_error = None
-    for base_url in base_urls:
-        url = f"{base_url}/reddit/r/{subreddit}/hot"
-        try:
-            response = httpx.get(url, headers=headers, params=params, timeout=30)
-        except Exception as exc:
-            last_error = f"Request failed: {exc}"
-            continue
+    for path in paths:
+        for base_url in base_urls:
+            url = f"{base_url}{path}"
+            try:
+                response = httpx.get(url, headers=headers, params=params, timeout=30)
+            except Exception as exc:
+                last_error = f"Request failed: {exc}"
+                continue
 
-        print(f"\n📡 Request: {url}")
-        print(f"Status: {response.status_code}")
+            print(f"\n📡 Request: {url}")
+            print(f"Status: {response.status_code}")
 
-        if response.status_code == 404 and base_url == base_urls[0]:
-            continue
+            if response.status_code == 404:
+                continue
 
-        if response.status_code in (401, 403):
-            print("❌ Unauthorized: invalid or expired SteadyAPI key.")
-            return False
+            if response.status_code in (401, 403):
+                print("❌ Unauthorized: invalid or expired SteadyAPI key.")
+                return False
 
-        if response.status_code >= 400:
-            print(f"❌ HTTP error {response.status_code}: {response.text[:200]}")
-            return False
+            if response.status_code >= 400:
+                print(f"❌ HTTP error {response.status_code}: {response.text[:200]}")
+                return False
 
-        try:
-            data = response.json()
-        except ValueError as exc:
-            print(f"❌ Invalid JSON response: {exc}")
-            return False
+            try:
+                data = response.json()
+            except ValueError as exc:
+                print(f"❌ Invalid JSON response: {exc}")
+                return False
 
-        children = []
-        if isinstance(data, dict):
-            if isinstance(data.get("data"), dict) and "children" in data["data"]:
-                children = data["data"]["children"]
-            elif "children" in data:
-                children = data["children"]
-        elif isinstance(data, list):
-            children = data
+            children = []
+            if isinstance(data, dict):
+                if isinstance(data.get("data"), dict) and "children" in data["data"]:
+                    children = data["data"]["children"]
+                elif "children" in data:
+                    children = data["children"]
+            elif isinstance(data, list):
+                children = data
 
-        if not children:
-            print("⚠️ No posts returned. Check subreddit name or filters.")
-            return False
+            if not children:
+                print("⚠️ No posts returned. Check subreddit name or filters.")
+                return False
 
-        post = children[0].get("data", children[0])
-        print(f"✅ Successfully fetched post: {post.get('title', '')[:60]}...")
-        print(f"   Score: {post.get('score', 0)} | Comments: {post.get('num_comments', 0)}")
-        print("\n" + "=" * 70)
-        print("✅ ALL TESTS PASSED!")
-        print("=" * 70)
-        return True
+            post = children[0].get("data", children[0])
+            print(f"✅ Successfully fetched post: {post.get('title', '')[:60]}...")
+            print(f"   Score: {post.get('score', 0)} | Comments: {post.get('num_comments', 0)}")
+            print("\n" + "=" * 70)
+            print("✅ ALL TESTS PASSED!")
+            print("=" * 70)
+            return True
 
-    print(f"❌ SteadyAPI request failed. {last_error or ''}")
+    print(f"❌ SteadyAPI request failed. {last_error or 'All paths returned 404.'}")
     return False
 
 

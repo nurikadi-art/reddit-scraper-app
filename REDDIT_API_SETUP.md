@@ -26,6 +26,9 @@ You can place this in:
 ### 404 Not Found
 - The SteadyAPI endpoint might be changing
 - Enable the debug panel in the Streamlit app to see request details
+- Override paths if needed:
+  - `STEADYAPI_REDDIT_HOT_PATHS=/reddit/r/{subreddit}/hot,/reddit/{subreddit}/hot`
+  - `STEADYAPI_REDDIT_COMMENTS_PATHS=/reddit/r/{subreddit}/comments/{post_id},/reddit/comments/{post_id}`
 
 ### No Posts Found
 - Lower the minimum upvotes

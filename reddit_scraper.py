@@ -45,6 +45,29 @@ SUBREDDIT_CATEGORIES = {
 STEADYAPI_BASE_URLS = ("https://api.steadyapi.com/v1", "https://api.steadyapi.com")
 STEADYAPI_TIMEOUT = 30
 MAX_STEADYAPI_LIMIT = 100
+DEFAULT_HOT_PATHS = (
+    "/reddit/r/{subreddit}/hot",
+    "/reddit/{subreddit}/hot",
+    "/reddit/r/{subreddit}/hot.json",
+    "/reddit/{subreddit}/hot.json",
+    "/reddit/subreddit/{subreddit}/hot",
+)
+DEFAULT_COMMENT_PATHS = (
+    "/reddit/r/{subreddit}/comments/{post_id}",
+    "/reddit/comments/{post_id}",
+    "/reddit/r/{subreddit}/comments/{post_id}.json",
+    "/reddit/comments/{post_id}.json",
+)
+
+
+def build_path_candidates(env_key: str, default_paths: tuple, **kwargs: str) -> List[str]:
+    """Build SteadyAPI path candidates with optional env override."""
+    override = os.getenv(env_key, "")
+    if override:
+        templates = [item.strip() for item in override.split(",") if item.strip()]
+    else:
+        templates = list(default_paths)
+    return [template.format(**kwargs) for template in templates]
 
 
 def normalize_timestamp(value: Any) -> Optional[float]:
@@ -125,7 +148,7 @@ class RedditScraper:
         if post_id not in self.scraped_posts["post_ids"]:
             self.scraped_posts["post_ids"].append(post_id)
 
-    def _steadyapi_get(self, path: str, params: Dict[str, Any]) -> Any:
+    def _steadyapi_get(self, paths: Any, params: Dict[str, Any]) -> Any:
         """Fetch data from SteadyAPI with endpoint fallback."""
         headers = {
             "Authorization": f"Bearer {self.steadyapi_key}",
@@ -135,32 +158,34 @@ class RedditScraper:
         }
 
         last_error: Optional[str] = None
+        path_list = [paths] if isinstance(paths, str) else list(paths)
 
-        for base_url in STEADYAPI_BASE_URLS:
-            url = f"{base_url}{path}"
-            try:
-                with httpx.Client(timeout=STEADYAPI_TIMEOUT) as client:
-                    response = client.get(url, headers=headers, params=params)
-            except Exception as exc:
-                last_error = f"Request failed: {exc}"
-                continue
+        for path in path_list:
+            for base_url in STEADYAPI_BASE_URLS:
+                url = f"{base_url}{path}"
+                try:
+                    with httpx.Client(timeout=STEADYAPI_TIMEOUT) as client:
+                        response = client.get(url, headers=headers, params=params)
+                except Exception as exc:
+                    last_error = f"Request failed: {exc}"
+                    continue
 
-            if response.status_code in (401, 403):
-                raise RuntimeError("SteadyAPI authentication failed (401/403).")
+                if response.status_code in (401, 403):
+                    raise RuntimeError("SteadyAPI authentication failed (401/403).")
 
-            if response.status_code == 404 and base_url == STEADYAPI_BASE_URLS[0]:
-                continue
+                if response.status_code == 404:
+                    continue
 
-            if response.status_code >= 400:
-                preview = response.text[:200]
-                raise RuntimeError(f"SteadyAPI HTTP {response.status_code}: {preview}")
+                if response.status_code >= 400:
+                    preview = response.text[:200]
+                    raise RuntimeError(f"SteadyAPI HTTP {response.status_code}: {preview}")
 
-            try:
-                return response.json()
-            except ValueError as exc:
-                raise RuntimeError(f"Invalid JSON response from SteadyAPI: {exc}") from exc
+                try:
+                    return response.json()
+                except ValueError as exc:
+                    raise RuntimeError(f"Invalid JSON response from SteadyAPI: {exc}") from exc
 
-        raise RuntimeError(last_error or "All SteadyAPI endpoints failed.")
+        raise RuntimeError(last_error or "All SteadyAPI paths returned 404.")
 
     def get_viral_posts(self, subreddit_name: str, limit: int = 20, hours_limit: int = 72, min_upvotes: int = 50):
         """
@@ -180,8 +205,13 @@ class RedditScraper:
         )
 
         try:
+            paths = build_path_candidates(
+                "STEADYAPI_REDDIT_HOT_PATHS",
+                DEFAULT_HOT_PATHS,
+                subreddit=subreddit_name,
+            )
             data = self._steadyapi_get(
-                f"/reddit/r/{subreddit_name}/hot",
+                paths,
                 {"limit": min(limit * 2, MAX_STEADYAPI_LIMIT)},
             )
         except Exception as exc:
@@ -288,11 +318,14 @@ class RedditScraper:
         Returns:
             List of comment dictionaries
         """
-        path = f"/reddit/comments/{post_id}"
-        if subreddit_name:
-            path = f"/reddit/r/{subreddit_name}/comments/{post_id}"
+        path_candidates = build_path_candidates(
+            "STEADYAPI_REDDIT_COMMENTS_PATHS",
+            DEFAULT_COMMENT_PATHS,
+            subreddit=subreddit_name or "all",
+            post_id=post_id,
+        )
         try:
-            data = self._steadyapi_get(path, {"limit": limit})
+            data = self._steadyapi_get(path_candidates, {"limit": limit})
         except Exception as exc:
             print(f"  ⚠️ Comment fetch failed for {post_id}: {exc}")
             return []

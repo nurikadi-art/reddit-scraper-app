@@ -207,6 +207,9 @@ Best for: Broad appeal topics
 ### Error fetching subreddit
 - **Cause**: SteadyAPI request failed or subreddit is private/banned
 - **Fix**: Verify STEADYAPI_KEY and check app debug panel for details
+  - If you see HTTP 404, set endpoint overrides:
+    - `STEADYAPI_REDDIT_HOT_PATHS=/reddit/r/{subreddit}/hot,/reddit/{subreddit}/hot`
+    - `STEADYAPI_REDDIT_COMMENTS_PATHS=/reddit/r/{subreddit}/comments/{post_id},/reddit/comments/{post_id}`
 
 ### API error from Anthropic
 - **Cause**: Invalid API key or no credits

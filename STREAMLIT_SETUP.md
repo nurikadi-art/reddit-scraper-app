@@ -98,6 +98,16 @@ The app will show:
 - Try a different category
 - Run at a different time (Reddit activity varies)
 
+### Error: "HTTP 404 from SteadyAPI"
+
+**Cause**: SteadyAPI endpoint path mismatch
+
+**Fix**:
+- Enable the debug panel in the app to see the exact URLs being called
+- Add path overrides in Streamlit Secrets:
+  - `STEADYAPI_REDDIT_HOT_PATHS=/reddit/r/{subreddit}/hot,/reddit/{subreddit}/hot`
+  - `STEADYAPI_REDDIT_COMMENTS_PATHS=/reddit/r/{subreddit}/comments/{post_id},/reddit/comments/{post_id}`
+
 ### Error: "Rate limit exceeded"
 
 **Cause**: SteadyAPI rate limits for your plan

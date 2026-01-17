@@ -106,6 +106,19 @@ Call to Action:
 STEADYAPI_BASE_URLS = ("https://api.steadyapi.com/v1", "https://api.steadyapi.com")
 STEADYAPI_TIMEOUT = 30
 MAX_STEADYAPI_LIMIT = 100
+DEFAULT_HOT_PATHS = (
+    "/reddit/r/{subreddit}/hot",
+    "/reddit/{subreddit}/hot",
+    "/reddit/r/{subreddit}/hot.json",
+    "/reddit/{subreddit}/hot.json",
+    "/reddit/subreddit/{subreddit}/hot",
+)
+DEFAULT_COMMENT_PATHS = (
+    "/reddit/r/{subreddit}/comments/{post_id}",
+    "/reddit/comments/{post_id}",
+    "/reddit/r/{subreddit}/comments/{post_id}.json",
+    "/reddit/comments/{post_id}.json",
+)
 
 
 def get_api_keys() -> Dict[str, Optional[str]]:
@@ -207,8 +220,19 @@ def extract_children(data: Any) -> List[Dict[str, Any]]:
     return []
 
 
-def steadyapi_get(path: str, params: Dict[str, Any], api_key: str) -> Tuple[Optional[Any], Dict[str, Any]]:
+def build_path_candidates(env_key: str, default_paths: Tuple[str, ...], **kwargs: str) -> List[str]:
+    """Build SteadyAPI path candidates with optional env override."""
+    override = os.getenv(env_key, "")
+    if override:
+        templates = [item.strip() for item in override.split(",") if item.strip()]
+    else:
+        templates = list(default_paths)
+    return [template.format(**kwargs) for template in templates]
+
+
+def steadyapi_get(paths: Any, params: Dict[str, Any], api_key: str) -> Tuple[Optional[Any], Dict[str, Any]]:
     """Fetch data from SteadyAPI with endpoint fallback and debug details."""
+    path_list = [paths] if isinstance(paths, str) else list(paths)
     headers = {
         "Authorization": f"Bearer {api_key}",
         "X-API-KEY": api_key,
@@ -219,50 +243,64 @@ def steadyapi_get(path: str, params: Dict[str, Any], api_key: str) -> Tuple[Opti
     attempts: List[Dict[str, Any]] = []
     last_error: Optional[str] = None
 
-    for base_url in STEADYAPI_BASE_URLS:
-        url = f"{base_url}{path}"
-        try:
-            with httpx.Client(timeout=STEADYAPI_TIMEOUT) as client:
-                response = client.get(url, headers=headers, params=params)
-        except Exception as exc:
+    for path in path_list:
+        for base_url in STEADYAPI_BASE_URLS:
+            url = f"{base_url}{path}"
+            try:
+                with httpx.Client(timeout=STEADYAPI_TIMEOUT) as client:
+                    response = client.get(url, headers=headers, params=params)
+            except Exception as exc:
+                attempts.append(
+                    {
+                        "url": url,
+                        "status_code": None,
+                        "elapsed_ms": None,
+                        "response_preview": str(exc)[:400],
+                    }
+                )
+                last_error = f"Request failed: {exc}"
+                continue
+
             attempts.append(
                 {
                     "url": url,
-                    "status_code": None,
-                    "elapsed_ms": None,
-                    "response_preview": str(exc)[:400],
+                    "status_code": response.status_code,
+                    "elapsed_ms": int(response.elapsed.total_seconds() * 1000),
+                    "response_preview": response.text[:400],
                 }
             )
-            last_error = f"Request failed: {exc}"
-            continue
 
-        attempts.append(
-            {
-                "url": url,
-                "status_code": response.status_code,
-                "elapsed_ms": int(response.elapsed.total_seconds() * 1000),
-                "response_preview": response.text[:400],
-            }
-        )
+            if response.status_code in (401, 403):
+                return None, {
+                    "attempts": attempts,
+                    "paths": path_list,
+                    "error": "SteadyAPI authentication failed (401/403).",
+                }
 
-        if response.status_code in (401, 403):
-            return None, {"attempts": attempts, "error": "SteadyAPI authentication failed (401/403)."}
+            if response.status_code == 404:
+                continue
 
-        if response.status_code == 404 and base_url == STEADYAPI_BASE_URLS[0]:
-            continue
+            if response.status_code >= 400:
+                return None, {
+                    "attempts": attempts,
+                    "paths": path_list,
+                    "error": f"HTTP {response.status_code} from SteadyAPI.",
+                }
 
-        if response.status_code >= 400:
-            return None, {
-                "attempts": attempts,
-                "error": f"HTTP {response.status_code} from SteadyAPI.",
-            }
+            try:
+                return response.json(), {"attempts": attempts, "paths": path_list, "error": None}
+            except ValueError as exc:
+                return None, {
+                    "attempts": attempts,
+                    "paths": path_list,
+                    "error": f"Invalid JSON response: {exc}",
+                }
 
-        try:
-            return response.json(), {"attempts": attempts, "error": None}
-        except ValueError as exc:
-            return None, {"attempts": attempts, "error": f"Invalid JSON response: {exc}"}
-
-    return None, {"attempts": attempts, "error": last_error or "All SteadyAPI endpoints failed."}
+    return None, {
+        "attempts": attempts,
+        "paths": path_list,
+        "error": last_error or "All SteadyAPI paths returned 404.",
+    }
 
 
 def fetch_reddit_posts_steadyapi(
@@ -270,7 +308,12 @@ def fetch_reddit_posts_steadyapi(
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Fetch raw posts using SteadyAPI."""
     params = {"limit": min(limit, MAX_STEADYAPI_LIMIT)}
-    data, debug = steadyapi_get(f"/reddit/r/{subreddit_name}/hot", params, api_key)
+    paths = build_path_candidates(
+        "STEADYAPI_REDDIT_HOT_PATHS",
+        DEFAULT_HOT_PATHS,
+        subreddit=subreddit_name,
+    )
+    data, debug = steadyapi_get(paths, params, api_key)
     posts = extract_children(data) if data is not None else []
     return posts, debug
 
@@ -280,7 +323,13 @@ def fetch_reddit_comments_steadyapi(
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Fetch top comments via SteadyAPI."""
     params = {"limit": limit}
-    data, debug = steadyapi_get(f"/reddit/r/{subreddit_name}/comments/{post_id}", params, api_key)
+    paths = build_path_candidates(
+        "STEADYAPI_REDDIT_COMMENTS_PATHS",
+        DEFAULT_COMMENT_PATHS,
+        subreddit=subreddit_name,
+        post_id=post_id,
+    )
+    data, debug = steadyapi_get(paths, params, api_key)
 
     comments: List[Dict[str, Any]] = []
     comment_listing: List[Dict[str, Any]] = []
