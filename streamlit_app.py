@@ -2,15 +2,17 @@
 """
 Viral Script Generator - Streamlit App
 Generates viral Reels/Shorts scripts from Reddit posts using the Phenomenon formula
+Uses Reddit's public JSON API (no authentication required!)
 """
 
 import streamlit as st
 import os
 import json
-import praw
+import httpx
 from anthropic import Anthropic
 from datetime import datetime, timedelta
 from pathlib import Path
+import time
 
 # Page config
 st.set_page_config(
@@ -100,104 +102,44 @@ Call to Action:
 """
 
 
-def get_credentials():
-    """Get API credentials from Streamlit secrets or environment variables"""
+def get_anthropic_key():
+    """Get Anthropic API key from Streamlit secrets or environment variables"""
     try:
         # Try Streamlit secrets first (for Streamlit Cloud)
-        return {
-            'reddit_client_id': st.secrets['REDDIT_CLIENT_ID'],
-            'reddit_client_secret': st.secrets['REDDIT_CLIENT_SECRET'],
-            'reddit_user_agent': st.secrets.get('REDDIT_USER_AGENT', 'RedditScraperBot/1.0'),
-            'anthropic_api_key': st.secrets['ANTHROPIC_API_KEY']
-        }
-    except (KeyError, FileNotFoundError) as e:
+        return st.secrets['ANTHROPIC_API_KEY']
+    except (KeyError, FileNotFoundError):
         # Fall back to environment variables (for local development)
         try:
             from dotenv import load_dotenv
             load_dotenv()
-
-            return {
-                'reddit_client_id': os.getenv('REDDIT_CLIENT_ID'),
-                'reddit_client_secret': os.getenv('REDDIT_CLIENT_SECRET'),
-                'reddit_user_agent': os.getenv('REDDIT_USER_AGENT', 'RedditScraperBot/1.0'),
-                'anthropic_api_key': os.getenv('ANTHROPIC_API_KEY')
-            }
+            return os.getenv('ANTHROPIC_API_KEY')
         except Exception:
-            # If both methods fail, return None values
-            return {
-                'reddit_client_id': None,
-                'reddit_client_secret': None,
-                'reddit_user_agent': 'RedditScraperBot/1.0',
-                'anthropic_api_key': None
-            }
+            return None
 
 
-def init_clients():
-    """Initialize Reddit and Anthropic clients"""
-    creds = get_credentials()
+def init_anthropic():
+    """Initialize Anthropic client"""
+    api_key = get_anthropic_key()
 
-    # Validate credentials
-    if not all([creds['reddit_client_id'], creds['reddit_client_secret'], creds['anthropic_api_key']]):
-        st.error("❌ **Missing API credentials!**")
+    if not api_key:
+        st.error("❌ **Missing Anthropic API Key!**")
         st.markdown("""
-        **Please configure your API credentials:**
+        **Please configure your Anthropic API key:**
 
         **On Streamlit Cloud:**
         1. Click "⚙️ Manage app" (bottom right)
         2. Go to Settings → Secrets
-        3. Add your credentials in TOML format
+        3. Add: `ANTHROPIC_API_KEY = "your_key_here"`
         4. Click "Save"
 
-        **See `REDDIT_API_SETUP.md` for detailed instructions.**
+        **Get your API key:** https://console.anthropic.com/
         """)
         st.stop()
 
     try:
-        reddit = praw.Reddit(
-            client_id=creds['reddit_client_id'],
-            client_secret=creds['reddit_client_secret'],
-            user_agent=creds['reddit_user_agent']
-        )
-
-        # Test the connection by forcing authentication
-        reddit.read_only = True
-
-        # Try to access Reddit API to verify credentials
-        try:
-            # This will trigger OAuth and validate credentials
-            list(reddit.subreddit('Python').hot(limit=1))
-        except praw.exceptions.ResponseException as e:
-            st.error("❌ **Reddit API Authentication Failed (500 Error)**")
-            st.markdown("""
-            **This error means your Reddit credentials are incorrect or your app type is wrong.**
-
-            **Common causes:**
-            - ❌ Client ID or Client Secret is wrong
-            - ❌ Your Reddit app type is NOT "script" (it must be "script", not "web app")
-            - ❌ The Reddit app was deleted or disabled
-
-            **How to fix:**
-            1. Go to: https://www.reddit.com/prefs/apps
-            2. Find your app - it MUST say **"personal use script"** under the name
-            3. If it doesn't, create a NEW app with type "script"
-            4. Copy the correct Client ID and Client Secret
-            5. Update your Streamlit secrets
-            6. Restart the app
-
-            **📖 Detailed guide:** See `REDDIT_API_SETUP.md` in the repository
-
-            **🧪 Test your credentials:** Run `python test_credentials.py` locally
-            """)
-            st.error(f"Technical details: {e}")
-            st.stop()
-
-        anthropic = Anthropic(api_key=creds['anthropic_api_key'])
-
-        return reddit, anthropic
-
+        return Anthropic(api_key=api_key)
     except Exception as e:
-        st.error(f"❌ **Error initializing API clients:** {type(e).__name__}")
-        st.exception(e)
+        st.error(f"❌ **Error initializing Anthropic API:** {e}")
         st.stop()
 
 
@@ -217,88 +159,176 @@ def save_tracking(tracking_data):
         json.dump(tracking_data, f, indent=2)
 
 
-def get_viral_posts(reddit, subreddit_name, limit=20, hours_limit=72, min_upvotes=100, tracking_data=None):
+def fetch_reddit_posts(subreddit_name, limit=50, sort='hot'):
+    """
+    Fetch posts from Reddit using public JSON API (no authentication required!)
+
+    Args:
+        subreddit_name: Name of subreddit
+        limit: Number of posts to fetch (max 100)
+        sort: 'hot', 'new', or 'top'
+
+    Returns:
+        List of post dictionaries
+    """
+    url = f"https://www.reddit.com/r/{subreddit_name}/{sort}.json"
+    headers = {
+        'User-Agent': 'ViralScriptGenerator/1.0'
+    }
+    params = {
+        'limit': min(limit, 100)  # Reddit max is 100
+    }
+
+    try:
+        with httpx.Client() as client:
+            response = client.get(url, headers=headers, params=params, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+
+        posts = []
+        for child in data['data']['children']:
+            post = child['data']
+            posts.append({
+                'id': post['id'],
+                'title': post['title'],
+                'author': post.get('author', '[deleted]'),
+                'score': post['score'],
+                'upvote_ratio': post.get('upvote_ratio', 0),
+                'url': post['url'],
+                'permalink': f"https://reddit.com{post['permalink']}",
+                'created_utc': post['created_utc'],
+                'num_comments': post['num_comments'],
+                'selftext': post.get('selftext', ''),
+                'subreddit': subreddit_name,
+                'is_self': post['is_self']
+            })
+
+        return posts
+
+    except httpx.HTTPStatusError as e:
+        st.warning(f"⚠️ Could not fetch r/{subreddit_name}: {e.response.status_code}")
+        return []
+    except Exception as e:
+        st.warning(f"⚠️ Error fetching r/{subreddit_name}: {e}")
+        return []
+
+
+def fetch_reddit_comments(subreddit_name, post_id, limit=10):
+    """
+    Fetch comments from a Reddit post using public JSON API
+
+    Args:
+        subreddit_name: Name of subreddit
+        post_id: Reddit post ID
+        limit: Number of comments to fetch
+
+    Returns:
+        List of comment dictionaries
+    """
+    url = f"https://www.reddit.com/r/{subreddit_name}/comments/{post_id}.json"
+    headers = {
+        'User-Agent': 'ViralScriptGenerator/1.0'
+    }
+    params = {
+        'limit': limit
+    }
+
+    try:
+        with httpx.Client() as client:
+            response = client.get(url, headers=headers, params=params, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+
+        comments = []
+        # Comments are in the second element of the response
+        if len(data) > 1:
+            comment_listing = data[1]['data']['children']
+
+            for child in comment_listing[:limit]:
+                if child['kind'] == 't1':  # Comment type
+                    comment = child['data']
+                    if comment.get('body') and len(comment['body']) > 20:
+                        comments.append({
+                            'author': comment.get('author', '[deleted]'),
+                            'body': comment['body'],
+                            'score': comment['score']
+                        })
+
+        return comments
+
+    except Exception as e:
+        return []
+
+
+def get_viral_posts(subreddit_name, limit=20, hours_limit=72, min_upvotes=100, tracking_data=None):
     """Fetch viral posts from a subreddit"""
     if tracking_data is None:
         tracking_data = {'post_ids': []}
 
-    subreddit = reddit.subreddit(subreddit_name)
-    posts = []
+    # Fetch more posts to account for filtering
+    raw_posts = fetch_reddit_posts(subreddit_name, limit=limit * 3, sort='hot')
 
     cutoff_time = datetime.now() - timedelta(hours=hours_limit)
     cutoff_timestamp = cutoff_time.timestamp()
 
-    for post in subreddit.hot(limit=limit * 2):
+    posts = []
+
+    for post in raw_posts:
         # Skip old posts
-        if post.created_utc < cutoff_timestamp:
+        if post['created_utc'] < cutoff_timestamp:
             continue
 
         # Skip duplicates
-        if post.id in tracking_data['post_ids']:
+        if post['id'] in tracking_data['post_ids']:
             continue
 
         # Skip low engagement
-        if post.score < min_upvotes:
+        if post['score'] < min_upvotes:
             continue
 
         # Determine post type
         post_type = 'discussion'
-        if post.is_self and ('?' in post.title or 'how' in post.title.lower()):
+        if post['is_self'] and ('?' in post['title'] or 'how' in post['title'].lower()):
             post_type = 'question'
-        elif 'case study' in post.title.lower() or 'how i' in post.title.lower():
+        elif 'case study' in post['title'].lower() or 'how i' in post['title'].lower():
             post_type = 'case_study'
 
-        post_time = datetime.fromtimestamp(post.created_utc)
+        post_time = datetime.fromtimestamp(post['created_utc'])
+        post['created_utc'] = post_time.strftime('%Y-%m-%d %H:%M:%S')
+        post['age_hours'] = round((datetime.now() - post_time).total_seconds() / 3600, 1)
+        post['post_type'] = post_type
 
-        post_data = {
-            'title': post.title,
-            'author': str(post.author),
-            'score': post.score,
-            'upvote_ratio': post.upvote_ratio,
-            'url': post.url,
-            'permalink': f"https://reddit.com{post.permalink}",
-            'created_utc': post_time.strftime('%Y-%m-%d %H:%M:%S'),
-            'age_hours': round((datetime.now() - post_time).total_seconds() / 3600, 1),
-            'num_comments': post.num_comments,
-            'selftext': post.selftext if post.selftext else '',
-            'subreddit': subreddit_name,
-            'id': post.id,
-            'post_type': post_type
-        }
-
-        posts.append(post_data)
-        tracking_data['post_ids'].append(post.id)
+        posts.append(post)
+        tracking_data['post_ids'].append(post['id'])
 
         if len(posts) >= limit:
             break
 
+        # Be nice to Reddit's servers
+        time.sleep(0.5)
+
     return posts
 
 
-def get_viral_comments(reddit, post_id, post_type='discussion', limit=5):
+def get_viral_comments(subreddit_name, post_id, post_type='discussion', limit=5):
     """Fetch top comments from a post"""
-    submission = reddit.submission(id=post_id)
-    submission.comment_sort = 'top'
-    submission.comments.replace_more(limit=0)
+    comments = fetch_reddit_comments(subreddit_name, post_id, limit=limit * 2)
 
-    comments = []
-    for comment in submission.comments[:limit * 2]:
-        if hasattr(comment, 'body') and len(comment.body) > 20:
-            is_quality = True
-            if post_type == 'question':
-                is_quality = len(comment.body) > 100
+    # Filter for quality
+    quality_comments = []
+    for comment in comments:
+        is_quality = True
+        if post_type == 'question':
+            is_quality = len(comment['body']) > 100  # Prefer detailed answers
 
-            if is_quality:
-                comments.append({
-                    'author': str(comment.author),
-                    'body': comment.body,
-                    'score': comment.score
-                })
+        if is_quality:
+            quality_comments.append(comment)
 
-            if len(comments) >= limit:
-                break
+        if len(quality_comments) >= limit:
+            break
 
-    return comments
+    time.sleep(0.5)  # Be nice to Reddit's servers
+    return quality_comments
 
 
 def generate_script(anthropic_client, post):
@@ -334,6 +364,7 @@ def generate_script(anthropic_client, post):
 # Main UI
 st.title("🎬 Viral Script Generator")
 st.markdown("**Generate viral Reels/Shorts scripts from Reddit using the Phenomenon formula**")
+st.info("✨ **No Reddit API needed!** Uses Reddit's public data - just add your Anthropic API key")
 
 # Sidebar configuration
 with st.sidebar:
@@ -360,7 +391,7 @@ with st.sidebar:
 if generate_button:
     try:
         # Initialize
-        reddit, anthropic = init_clients()
+        anthropic = init_anthropic()
         tracking_data = load_tracking()
 
         # Progress tracking
@@ -388,7 +419,7 @@ if generate_button:
             status_text.text(f"📊 Fetching from r/{subreddit}...")
 
             posts = get_viral_posts(
-                reddit, subreddit,
+                subreddit,
                 limit=posts_per_sub,
                 hours_limit=72,
                 min_upvotes=min_upvotes,
@@ -397,7 +428,7 @@ if generate_button:
 
             # Get comments
             for post in posts:
-                comments = get_viral_comments(reddit, post['id'], post['post_type'], limit=5)
+                comments = get_viral_comments(subreddit, post['id'], post['post_type'], limit=5)
                 post['top_comments'] = comments
 
             all_posts.extend(posts)
@@ -475,7 +506,7 @@ if generate_button:
 
 else:
     # Welcome screen
-    st.info("👈 Configure your settings in the sidebar and click '🚀 Generate Scripts' to start!")
+    st.success("✨ **Simplified Setup!** Only Anthropic API key needed - no Reddit authentication required!")
 
     st.markdown("### 🎯 The Viral Formula")
     st.markdown("""
