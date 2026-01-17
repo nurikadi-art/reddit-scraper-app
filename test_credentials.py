@@ -1,135 +1,148 @@
 #!/usr/bin/env python3
 """
-Reddit API Credential Tester
-Use this to verify your Reddit API credentials are working
+ScrapeCreators Credential Tester
+Use this to verify your ScrapeCreators key is working
 """
 
-import praw
+import os
 import sys
 
-def test_reddit_credentials(client_id, client_secret, user_agent):
-    """Test if Reddit API credentials are valid"""
+import httpx
 
-    print("=" * 70)
-    print("🔍 Testing Reddit API Credentials")
-    print("=" * 70)
-
-    print(f"\nClient ID: {client_id[:10]}... (hidden)")
-    print(f"Client Secret: {client_secret[:10]}... (hidden)")
-    print(f"User Agent: {user_agent}")
-
-    try:
-        print("\n📡 Initializing Reddit client...")
-        reddit = praw.Reddit(
-            client_id=client_id,
-            client_secret=client_secret,
-            user_agent=user_agent
-        )
-
-        print("✅ Reddit client initialized")
-
-        print("\n🔐 Testing authentication...")
-        # This will trigger the OAuth authentication
-        reddit.read_only = True
-
-        print("✅ Authentication successful")
-
-        print("\n📊 Testing API access (fetching r/Python)...")
-        subreddit = reddit.subreddit('Python')
-
-        # Try to get one post
-        for post in subreddit.hot(limit=1):
-            print(f"✅ Successfully fetched post: {post.title[:50]}...")
-            print(f"   Score: {post.score} | Comments: {post.num_comments}")
-            break
-
-        print("\n" + "=" * 70)
-        print("✅ ALL TESTS PASSED!")
-        print("=" * 70)
-        print("\n✨ Your Reddit API credentials are working correctly!")
-        print("   You can now use the Streamlit app.\n")
-
-        return True
-
-    except praw.exceptions.ResponseException as e:
-        print("\n" + "=" * 70)
-        print("❌ REDDIT API ERROR")
-        print("=" * 70)
-        print(f"\nError: {e}")
-        print("\nThis usually means:")
-        print("  1. Your Client ID or Client Secret is incorrect")
-        print("  2. Your Reddit app type is wrong (must be 'script')")
-        print("  3. Your Reddit app was deleted or disabled")
-
-        print("\n🔧 How to fix:")
-        print("  1. Go to: https://www.reddit.com/prefs/apps")
-        print("  2. Find your app or create a new one")
-        print("  3. Make sure 'app type' is set to 'script'")
-        print("  4. Copy the Client ID (under your app name)")
-        print("  5. Copy the Client Secret (the 'secret' field)")
-        print("  6. Update your Streamlit secrets\n")
-
-        return False
-
-    except Exception as e:
-        print("\n" + "=" * 70)
-        print("❌ UNEXPECTED ERROR")
-        print("=" * 70)
-        print(f"\nError: {type(e).__name__}: {e}")
-        print("\nPlease check:")
-        print("  1. Your internet connection")
-        print("  2. Reddit.com is accessible")
-        print("  3. Your credentials are correct\n")
-
-        return False
+DEFAULT_HOT_PATHS = (
+    "/reddit/subreddit",
+    "/reddit/subreddit/",
+    "/v1/reddit/subreddit",
+    "/v1/reddit/subreddit/",
+)
 
 
-if __name__ == '__main__':
-    print("\n" + "=" * 70)
-    print("Reddit API Credential Tester")
-    print("=" * 70)
-    print("\nThis script will test your Reddit API credentials.")
-    print("You can test in two ways:\n")
-    print("1. Using Streamlit secrets (for Streamlit Cloud)")
-    print("2. Using .env file (for local development)")
-    print("3. Manual input")
-
-    choice = input("\nEnter your choice (1/2/3): ").strip()
-
-    if choice == '1':
-        try:
-            import streamlit as st
-            client_id = st.secrets['REDDIT_CLIENT_ID']
-            client_secret = st.secrets['REDDIT_CLIENT_SECRET']
-            user_agent = st.secrets.get('REDDIT_USER_AGENT', 'RedditScraperBot/1.0')
-            print("\n✅ Loaded credentials from Streamlit secrets")
-        except Exception as e:
-            print(f"\n❌ Could not load Streamlit secrets: {e}")
-            print("Make sure you're running this from a Streamlit app")
-            sys.exit(1)
-
-    elif choice == '2':
-        try:
-            from dotenv import load_dotenv
-            import os
-            load_dotenv()
-            client_id = os.getenv('REDDIT_CLIENT_ID')
-            client_secret = os.getenv('REDDIT_CLIENT_SECRET')
-            user_agent = os.getenv('REDDIT_USER_AGENT', 'RedditScraperBot/1.0')
-
-            if not client_id or not client_secret:
-                print("\n❌ Missing credentials in .env file")
-                sys.exit(1)
-            print("\n✅ Loaded credentials from .env file")
-        except Exception as e:
-            print(f"\n❌ Could not load .env file: {e}")
-            sys.exit(1)
-
+def build_path_candidates(env_key: str, default_paths: tuple, **kwargs: str):
+    """Build ScrapeCreators path candidates with optional env override."""
+    override = os.getenv(env_key, "")
+    if override:
+        templates = [item.strip() for item in override.split(",") if item.strip()]
     else:
-        print("\nEnter your Reddit API credentials:")
-        client_id = input("Client ID: ").strip()
-        client_secret = input("Client Secret: ").strip()
-        user_agent = input("User Agent (or press Enter for default): ").strip() or "RedditScraperBot/1.0"
+        templates = list(default_paths)
+    return [template.format(**kwargs) for template in templates]
 
-    # Run the test
-    test_reddit_credentials(client_id, client_secret, user_agent)
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except Exception:
+    pass
+
+
+def test_scrapecreators_key(api_key: str, subreddit: str = "Python") -> bool:
+    """Test if ScrapeCreators key is valid by fetching one post."""
+    print("=" * 70)
+    print("🔍 Testing ScrapeCreators Key")
+    print("=" * 70)
+
+    override = os.getenv("SCRAPECREATORS_BASE_URLS") or os.getenv("SCRAPECREATORS_BASE_URL")
+    if override:
+        base_urls = [part.strip() for part in override.split(",") if part.strip()]
+    else:
+        base_urls = ["https://api.scrapecreators.com"]
+    headers = {
+        "x-api-key": api_key,
+        "Accept": "application/json",
+        "User-Agent": "ScrapeCreatorsTest/1.0",
+    }
+    params = {
+        "subreddit": subreddit.lower(),
+        "sort": os.getenv("SCRAPECREATORS_REDDIT_SORT", "hot"),
+        "limit": 1,
+    }
+
+    paths = build_path_candidates(
+        "SCRAPECREATORS_REDDIT_HOT_PATHS",
+        DEFAULT_HOT_PATHS,
+        subreddit=subreddit,
+    )
+
+    last_error = None
+    for path in paths:
+        for base_url in base_urls:
+            base = base_url.rstrip("/")
+            adjusted_path = path
+            has_base_v1 = base.endswith("/v1")
+            has_path_v1 = adjusted_path.startswith("/v1/")
+            if has_base_v1 and has_path_v1:
+                adjusted_path = adjusted_path[len("/v1") :]
+            elif not has_base_v1 and not has_path_v1:
+                adjusted_path = f"/v1{adjusted_path}"
+            url = f"{base}{adjusted_path}"
+            try:
+                response = httpx.get(url, headers=headers, params=params, timeout=30)
+            except Exception as exc:
+                last_error = f"Request failed: {exc}"
+                continue
+
+            print(f"\n📡 Request: {url}")
+            print(f"Status: {response.status_code}")
+
+            if response.status_code == 404:
+                continue
+
+            if response.status_code in (401, 403):
+                print("❌ Unauthorized: invalid or expired ScrapeCreators key.")
+                return False
+
+            if response.status_code >= 400:
+                print(f"❌ HTTP error {response.status_code}: {response.text[:200]}")
+                return False
+
+            try:
+                data = response.json()
+            except ValueError as exc:
+                print(f"❌ Invalid JSON response: {exc}")
+                return False
+
+            children = []
+            if isinstance(data, dict):
+                if isinstance(data.get("data"), dict) and "children" in data["data"]:
+                    children = data["data"]["children"]
+                elif "children" in data:
+                    children = data["children"]
+            elif isinstance(data, list):
+                children = data
+
+            if not children:
+                print("⚠️ No posts returned. Check subreddit name or filters.")
+                return False
+
+            post = children[0].get("data", children[0])
+            print(f"✅ Successfully fetched post: {post.get('title', '')[:60]}...")
+            print(f"   Score: {post.get('score', 0)} | Comments: {post.get('num_comments', 0)}")
+            print("\n" + "=" * 70)
+            print("✅ ALL TESTS PASSED!")
+            print("=" * 70)
+            return True
+
+    print(f"❌ ScrapeCreators request failed. {last_error or 'All paths returned 404.'}")
+    return False
+
+
+if __name__ == "__main__":
+    print("\n" + "=" * 70)
+    print("ScrapeCreators Credential Tester")
+    print("=" * 70)
+    print("\nThis script will test your ScrapeCreators key.")
+    print("You can test in two ways:\n")
+    print("1. Using SCRAPECREATORS_API_KEY from your environment")
+    print("2. Manual input")
+
+    choice = input("\nEnter your choice (1/2): ").strip()
+
+    if choice == "1":
+        api_key = os.getenv("SCRAPECREATORS_API_KEY")
+        if not api_key:
+            print("\n❌ Missing SCRAPECREATORS_API_KEY in environment.")
+            sys.exit(1)
+        print("\n✅ Loaded SCRAPECREATORS_API_KEY from environment")
+    else:
+        api_key = input("\nEnter your ScrapeCreators key: ").strip()
+
+    test_scrapecreators_key(api_key)

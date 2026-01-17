@@ -12,7 +12,7 @@ This guide shows you how to deploy the Viral Script Generator on Streamlit Cloud
 ## 📋 Prerequisites
 
 You already have:
-- ✅ Reddit API credentials (Client ID & Secret)
+- ✅ ScrapeCreators API key (https://scrapecreators.com/)
 - ✅ Anthropic API key
 - ✅ GitHub repository with the code
 
@@ -42,9 +42,7 @@ This is the **CRITICAL STEP** that fixes your error!
 3. Copy and paste this into the secrets box:
 
 ```toml
-REDDIT_CLIENT_ID = "your_reddit_client_id_here"
-REDDIT_CLIENT_SECRET = "your_reddit_client_secret_here"
-REDDIT_USER_AGENT = "RedditScraperBot/1.0"
+SCRAPECREATORS_API_KEY = "your_scrapecreators_api_key_here"
 ANTHROPIC_API_KEY = "your_anthropic_api_key_here"
 ```
 
@@ -88,7 +86,7 @@ The app will show:
 1. Go to your app on Streamlit Cloud
 2. Click "⚙️ Manage app" (bottom right)
 3. Click "⚙️ Settings" → "Secrets"
-4. Add your credentials (see Step 3 above)
+4. Add your credentials (SCRAPECREATORS_API_KEY + ANTHROPIC_API_KEY)
 5. Click "Save"
 
 ### Error: "No viral posts found"
@@ -100,13 +98,25 @@ The app will show:
 - Try a different category
 - Run at a different time (Reddit activity varies)
 
+### Error: "HTTP 404 from ScrapeCreators"
+
+**Cause**: ScrapeCreators endpoint path mismatch
+
+**Fix**:
+- Enable the debug panel in the app to see the exact URLs being called
+- Add path overrides in Streamlit Secrets:
+  - `SCRAPECREATORS_REDDIT_HOT_PATHS=/reddit/subreddit`
+  - `SCRAPECREATORS_REDDIT_COMMENTS_PATHS=/reddit/post/comments`
+- If your base URL differs, set: `SCRAPECREATORS_BASE_URLS=https://api.scrapecreators.com/v1`
+
 ### Error: "Rate limit exceeded"
 
-**Cause**: Reddit API has rate limits (60 requests/minute)
+**Cause**: ScrapeCreators rate limits for your plan
 
 **Fix**:
 - Reduce "Posts per Subreddit"
 - Wait a few minutes before trying again
+- Upgrade your ScrapeCreators plan if needed
 
 ### App is slow
 
@@ -136,7 +146,7 @@ The app will show:
 ## 💰 Cost Estimate (Streamlit Cloud)
 
 - **Streamlit Hosting**: FREE
-- **Reddit API**: FREE
+- **ScrapeCreators**: Based on your plan
 - **Anthropic API**: Pay-per-use
   - ~$0.03-0.05 per script
   - 20 scripts = ~$0.60-1.00
@@ -219,7 +229,7 @@ Containing 20 scripts with:
 1. Secrets are configured correctly (Step 3)
 2. API credentials are valid
 3. Anthropic account has credits
-4. Reddit API app type is "script"
+4. ScrapeCreators API key is active and not expired
 
 ### Still Stuck?
 

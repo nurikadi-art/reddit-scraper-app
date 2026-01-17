@@ -1,11 +1,11 @@
 # 🎬 Viral Script Generator - Streamlit Edition
 
-**The simplest Reddit viral script generator - no Reddit API needed!**
+**The simplest Reddit viral script generator - no Reddit API app needed!**
 
 ## ✨ What Changed
 
 **Before:** Required Reddit API credentials (complicated setup, Devvit migration issues)
-**Now:** Uses Reddit's public JSON feeds - **NO authentication required!**
+**Now:** Uses **ScrapeCreators API** for reliable Reddit data access (no Reddit app setup required)
 
 ## 🚀 Super Simple Setup (2 Minutes)
 
@@ -27,11 +27,12 @@
 
 ```toml
 ANTHROPIC_API_KEY = "your_anthropic_api_key_here"
+SCRAPECREATORS_API_KEY = "your_scrapecreators_api_key_here"
 ```
 
 5. Click "Save"
 
-**That's it!** No Reddit API setup needed!
+**That's it!** No Reddit API app setup needed.
 
 ### Step 3: Use the App
 
@@ -43,35 +44,32 @@ ANTHROPIC_API_KEY = "your_anthropic_api_key_here"
 
 ## 🎯 Features
 
-- ✅ **No Reddit API** - Uses public JSON feeds
-- ✅ **Only 1 API key** - Just Anthropic
+- ✅ **No Reddit API app** - ScrapeCreators handles Reddit access
+- ✅ **Only 2 API keys** - Anthropic + ScrapeCreators
 - ✅ **Same viral formula** - 4 psychological pillars
 - ✅ **Real-time progress** - Watch scripts generate live
 - ✅ **72-hour fresh content** - Latest viral posts only
 - ✅ **No duplicates** - Automatic tracking
 - ✅ **Download JSON** - Export all scripts
+- ✅ **Debug panel** - Inspect ScrapeCreators responses and filter counts
 
 ---
 
 ## 📊 How It Works
 
-### Reddit Public JSON API
+### ScrapeCreators API
 
-Instead of using PRAW (which requires authentication), we now use:
+Instead of using PRAW (which requires Reddit authentication), the app uses:
 
 ```
-https://www.reddit.com/r/{subreddit}/hot.json
+https://api.scrapecreators.com/v1/reddit/subreddit?subreddit={subreddit}&sort=hot&limit=50
 ```
-
-This is **completely public** and requires **no authentication**!
 
 **Advantages:**
 - ✅ No Reddit app creation needed
 - ✅ No Devvit migration issues
-- ✅ No authentication errors
-- ✅ Simpler code
-- ✅ More reliable
-- ✅ No rate limit headaches
+- ✅ Stable access with API key auth
+- ✅ Consistent data format
 
 **What we still get:**
 - ✅ Posts with upvotes, comments, timestamps
@@ -83,7 +81,7 @@ This is **completely public** and requires **no authentication**!
 
 ## 💰 Cost
 
-- **Reddit API**: FREE (public data)
+- **ScrapeCreators**: Based on your plan at https://scrapecreators.com/
 - **Anthropic API**: ~$0.03-0.05 per script
   - 20 scripts = ~$0.60-1.00
   - Daily use = ~$20-30/month
@@ -207,8 +205,12 @@ Best for: Broad appeal topics
 - **Fix**: Lower "Minimum Upvotes" to 50
 
 ### Error fetching subreddit
-- **Cause**: Subreddit might be private or banned
-- **Fix**: Skip that subreddit, try others
+- **Cause**: ScrapeCreators request failed or subreddit is private/banned
+- **Fix**: Verify SCRAPECREATORS_API_KEY and check app debug panel for details
+  - If you see HTTP 404, set endpoint overrides:
+    - `SCRAPECREATORS_REDDIT_HOT_PATHS=/reddit/subreddit`
+    - `SCRAPECREATORS_REDDIT_COMMENTS_PATHS=/reddit/post/comments`
+  - If your base URL differs, set: `SCRAPECREATORS_BASE_URLS=https://api.scrapecreators.com/v1`
 
 ### API error from Anthropic
 - **Cause**: Invalid API key or no credits
@@ -220,7 +222,7 @@ Best for: Broad appeal topics
 
 - `streamlit_app.py` - Main Streamlit app (use this!)
 - `app.py` - Flask version (alternative)
-- `reddit_scraper.py` - Old PRAW version (deprecated)
+- `reddit_scraper.py` - ScrapeCreators scraper (used by Flask app)
 - `.streamlit/secrets.toml.example` - Secrets template
 
 ---
@@ -236,9 +238,10 @@ If you were using the PRAW version:
 - ✅ Anthropic API Key
 
 **New setup:**
-- ✅ Anthropic API Key only!
+- ✅ Anthropic API Key
+- ✅ ScrapeCreators API Key
 
-**No migration needed** - just delete old Reddit secrets from Streamlit!
+**No Reddit API migration needed** - remove old Reddit secrets and add ScrapeCreators.
 
 ---
 
@@ -247,8 +250,8 @@ If you were using the PRAW version:
 You're ready to generate viral scripts!
 
 **Remember:**
-- ✨ Only Anthropic API key needed
-- 🚫 No Reddit API setup
+- ✨ Anthropic + ScrapeCreators keys required
+- 🚫 No Reddit API app setup
 - ⚡ Simpler, faster, more reliable
 
 Open your Streamlit app and click the purple button! 🚀
