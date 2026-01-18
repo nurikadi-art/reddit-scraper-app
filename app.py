@@ -2,6 +2,7 @@
 """
 Reddit Viral Script Generator Web App
 Flask application that scrapes viral Reddit posts and generates viral Reels/Shorts scripts
+Includes activity logging and rate limiting
 """
 
 from flask import Flask, render_template, jsonify, request
@@ -9,16 +10,25 @@ from reddit_scraper import RedditScraper, SUBREDDIT_CATEGORIES
 from datetime import datetime
 import json
 import threading
+import uuid
 from pathlib import Path
 
+# Import activity logger for tracking and rate limiting
+from activity_logger import get_logger
+
 app = Flask(__name__)
+
+# Get logger instance
+logger = get_logger()
 
 # Global variable to track scraping status
 scraping_status = {
     'running': False,
     'progress': '',
     'scripts': [],
-    'error': None
+    'error': None,
+    'session_id': None,
+    'rate_limit_status': None
 }
 
 class ViralScriptGenerator:
@@ -82,11 +92,45 @@ Call to Action:
 [A specific trigger for DM automation or engagement]
 """
 
-    def __init__(self, scraper):
+    def __init__(self, scraper, session_id):
         self.scraper = scraper
+        self.session_id = session_id
 
     def generate_script_for_post(self, post):
-        """Generate viral script for a single post using the Phenomenon formula"""
+        """Generate viral script for a single post using the Phenomenon formula with rate limiting"""
+        import time
+
+        # Check rate limit and wait if needed
+        rate_status = logger.get_rate_limit_status()
+        wait_time = 0
+        rate_limited = False
+
+        if not rate_status['can_proceed']:
+            wait_time = rate_status['wait_time_seconds']
+            rate_limited = True
+
+        # Acquire rate limit (will wait if necessary)
+        success, actual_wait = logger.acquire_rate_limit(timeout=120)
+
+        if not success:
+            # Log rate limit failure
+            logger.log_script_generation(
+                session_id=self.session_id,
+                post_id=post.get('id'),
+                post_title=post.get('title'),
+                subreddit=post.get('subreddit'),
+                post_score=post.get('score'),
+                status='rate_limited',
+                error_message='Rate limit timeout exceeded',
+                rate_limited=True,
+                wait_time_seconds=actual_wait
+            )
+            return {
+                'success': False,
+                'error': 'Rate limit timeout exceeded',
+                'post_title': post['title'],
+                'rate_limited': True
+            }
 
         # Prepare post content
         content = post.get('selftext', '')[:1000] if post.get('selftext') else 'Link post - see URL'
@@ -110,6 +154,8 @@ Call to Action:
             comments=comments_text
         )
 
+        start_time = time.time()
+
         # Call Claude AI
         try:
             message = self.scraper.anthropic.messages.create(
@@ -121,6 +167,21 @@ Call to Action:
             )
 
             script = message.content[0].text
+            generation_time_ms = int((time.time() - start_time) * 1000)
+
+            # Log successful generation
+            logger.log_script_generation(
+                session_id=self.session_id,
+                post_id=post.get('id'),
+                post_title=post.get('title'),
+                subreddit=post.get('subreddit'),
+                post_score=post.get('score'),
+                script=script,
+                generation_time_ms=generation_time_ms,
+                status='success',
+                rate_limited=rate_limited,
+                wait_time_seconds=actual_wait
+            )
 
             return {
                 'success': True,
@@ -129,9 +190,28 @@ Call to Action:
                 'post_url': post['permalink'],
                 'subreddit': post['subreddit'],
                 'upvotes': post['score'],
-                'post_type': post.get('post_type', 'discussion')
+                'post_type': post.get('post_type', 'discussion'),
+                'generation_time_ms': generation_time_ms,
+                'rate_limited': rate_limited,
+                'wait_time': actual_wait
             }
         except Exception as e:
+            generation_time_ms = int((time.time() - start_time) * 1000)
+
+            # Log the error
+            logger.log_script_generation(
+                session_id=self.session_id,
+                post_id=post.get('id'),
+                post_title=post.get('title'),
+                subreddit=post.get('subreddit'),
+                post_score=post.get('score'),
+                generation_time_ms=generation_time_ms,
+                status='error',
+                error_message=str(e),
+                rate_limited=rate_limited,
+                wait_time_seconds=actual_wait
+            )
+
             return {
                 'success': False,
                 'error': str(e),
@@ -139,19 +219,23 @@ Call to Action:
             }
 
 
-def run_scraper_background(category, posts_per_sub, target_count=20):
+def run_scraper_background(category, posts_per_sub, target_count=20, session_id=None):
     """Run the scraper in background and generate scripts"""
     global scraping_status
+
+    if session_id is None:
+        session_id = str(uuid.uuid4())[:16]
 
     try:
         scraping_status['running'] = True
         scraping_status['progress'] = 'Initializing scraper...'
         scraping_status['scripts'] = []
         scraping_status['error'] = None
+        scraping_status['session_id'] = session_id
 
         # Initialize scraper
         scraper = RedditScraper()
-        script_generator = ViralScriptGenerator(scraper)
+        script_generator = ViralScriptGenerator(scraper, session_id)
 
         # Get subreddits for category
         if category in SUBREDDIT_CATEGORIES:
@@ -167,7 +251,19 @@ def run_scraper_background(category, posts_per_sub, target_count=20):
         all_posts = []
         for subreddit in subreddits:
             scraping_status['progress'] = f'Fetching from r/{subreddit}...'
+
             posts = scraper.get_viral_posts(subreddit, limit=posts_per_sub, hours_limit=72, min_upvotes=100)
+
+            # Log the scrape
+            logger.log_scrape(
+                session_id=session_id,
+                subreddit=subreddit,
+                posts_found=len(posts),
+                category=category,
+                min_upvotes=100,
+                hours_limit=72,
+                status='success'
+            )
 
             # Fetch comments for each post
             if posts:
@@ -196,6 +292,8 @@ def run_scraper_background(category, posts_per_sub, target_count=20):
         # Generate scripts for each post
         generated_scripts = []
         for i, post in enumerate(all_posts, 1):
+            # Update rate limit status
+            scraping_status['rate_limit_status'] = logger.get_rate_limit_status()
             scraping_status['progress'] = f'Generating script {i}/{len(all_posts)} for: {post["title"][:50]}...'
 
             script_result = script_generator.generate_script_for_post(post)
@@ -214,7 +312,7 @@ def run_scraper_background(category, posts_per_sub, target_count=20):
         # Save tracking
         scraper._save_scraped_posts()
 
-        scraping_status['progress'] = f'✅ Complete! Generated {len(generated_scripts)} viral scripts'
+        scraping_status['progress'] = f'Complete! Generated {len(generated_scripts)} viral scripts'
         scraping_status['scripts'] = generated_scripts
         scraping_status['running'] = False
 
@@ -242,21 +340,26 @@ def start_scraping():
     posts_per_sub = data.get('posts_per_sub', 5)
     target_count = data.get('target_count', 20)
 
+    # Generate session ID from request
+    session_id = str(uuid.uuid4())[:16]
+
     # Start background thread
     thread = threading.Thread(
         target=run_scraper_background,
-        args=(category, posts_per_sub, target_count)
+        args=(category, posts_per_sub, target_count, session_id)
     )
     thread.daemon = True
     thread.start()
 
-    return jsonify({'success': True, 'message': 'Scraping started'})
+    return jsonify({'success': True, 'message': 'Scraping started', 'session_id': session_id})
 
 
 @app.route('/status')
 def get_status():
     """Get current scraping status"""
-    return jsonify(scraping_status)
+    status = scraping_status.copy()
+    status['rate_limit_status'] = logger.get_rate_limit_status()
+    return jsonify(status)
 
 
 @app.route('/scripts')
@@ -265,15 +368,36 @@ def get_scripts():
     return jsonify({'scripts': scraping_status['scripts']})
 
 
+@app.route('/activity_log')
+def get_activity_log():
+    """Get activity log data"""
+    hours = request.args.get('hours', 24, type=int)
+    limit = request.args.get('limit', 50, type=int)
+
+    return jsonify({
+        'summary': logger.get_activity_summary(hours),
+        'recent_scrapes': logger.get_recent_scrapes(limit),
+        'recent_scripts': logger.get_recent_scripts(limit)
+    })
+
+
+@app.route('/rate_limit_status')
+def get_rate_limit_status():
+    """Get current rate limit status"""
+    return jsonify(logger.get_rate_limit_status())
+
+
 if __name__ == '__main__':
     print("\n" + "="*70)
-    print("🚀 Viral Script Generator Web App")
+    print("Viral Script Generator Web App")
     print("="*70)
-    print("\n📱 Open your browser and go to: http://localhost:5000")
-    print("\n💡 Features:")
-    print("   • Scrapes viral Reddit posts (100+ upvotes)")
-    print("   • Generates Reels/Shorts scripts using Phenomenon formula")
-    print("   • Target: 20 viral scripts per run")
-    print("\n⏹️  Press Ctrl+C to stop the server\n")
+    print("\nOpen your browser and go to: http://localhost:5000")
+    print("\nFeatures:")
+    print("   - Scrapes viral Reddit posts (100+ upvotes)")
+    print("   - Generates Reels/Shorts scripts using Phenomenon formula")
+    print("   - Activity logging for all scrapes and scripts")
+    print("   - Rate limiting to prevent API throttling")
+    print("   - Target: 20 viral scripts per run")
+    print("\nPress Ctrl+C to stop the server\n")
 
     app.run(debug=True, host='0.0.0.0', port=5000)
