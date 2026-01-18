@@ -5,15 +5,12 @@ Provides persistent logging with SQLite and rate limiting for API calls
 """
 
 import sqlite3
-import json
 import time
 import threading
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Optional, Dict, List, Any
 from collections import deque
 import hashlib
-import os
 
 
 class RateLimiter:
@@ -49,9 +46,6 @@ class RateLimiter:
         # Thread lock for thread-safe operations
         self._lock = threading.Lock()
 
-        # Queue for pending requests
-        self._queue: deque = deque()
-
     def _cleanup_old_requests(self):
         """Remove expired timestamps from tracking"""
         now = time.time()
@@ -66,14 +60,38 @@ class RateLimiter:
         while self.hour_requests and self.hour_requests[0] < hour_ago:
             self.hour_requests.popleft()
 
+    def _can_proceed_unlocked(self) -> bool:
+        """Check if a request can proceed (must be called with lock held)"""
+        return (
+            len(self.minute_requests) < self.requests_per_minute and
+            len(self.hour_requests) < self.requests_per_hour
+        )
+
     def can_proceed(self) -> bool:
         """Check if a request can proceed without waiting"""
         with self._lock:
             self._cleanup_old_requests()
-            return (
-                len(self.minute_requests) < self.requests_per_minute and
-                len(self.hour_requests) < self.requests_per_hour
-            )
+            return self._can_proceed_unlocked()
+
+    def _get_wait_time_unlocked(self) -> float:
+        """Get wait time (must be called with lock held)"""
+        if self._can_proceed_unlocked():
+            return 0.0
+
+        now = time.time()
+        wait_times = []
+
+        # Check minute limit
+        if len(self.minute_requests) >= self.requests_per_minute:
+            oldest_minute = self.minute_requests[0]
+            wait_times.append(oldest_minute + 60 - now)
+
+        # Check hour limit
+        if len(self.hour_requests) >= self.requests_per_hour:
+            oldest_hour = self.hour_requests[0]
+            wait_times.append(oldest_hour + 3600 - now)
+
+        return max(0, min(wait_times)) if wait_times else 0.0
 
     def get_wait_time(self) -> float:
         """
@@ -84,24 +102,7 @@ class RateLimiter:
         """
         with self._lock:
             self._cleanup_old_requests()
-
-            if self.can_proceed():
-                return 0.0
-
-            now = time.time()
-            wait_times = []
-
-            # Check minute limit
-            if len(self.minute_requests) >= self.requests_per_minute:
-                oldest_minute = self.minute_requests[0]
-                wait_times.append(oldest_minute + 60 - now)
-
-            # Check hour limit
-            if len(self.hour_requests) >= self.requests_per_hour:
-                oldest_hour = self.hour_requests[0]
-                wait_times.append(oldest_hour + 3600 - now)
-
-            return max(0, min(wait_times)) if wait_times else 0.0
+            return self._get_wait_time_unlocked()
 
     def acquire(self, timeout: float = 300) -> bool:
         """
@@ -119,21 +120,22 @@ class RateLimiter:
             with self._lock:
                 self._cleanup_old_requests()
 
-                if (len(self.minute_requests) < self.requests_per_minute and
-                    len(self.hour_requests) < self.requests_per_hour):
+                if self._can_proceed_unlocked():
                     # Record this request
                     now = time.time()
                     self.minute_requests.append(now)
                     self.hour_requests.append(now)
                     return True
 
+                # Calculate wait time while holding lock
+                wait_time = min(self._get_wait_time_unlocked(), 5.0)
+
             # Check timeout
             elapsed = time.time() - start_time
             if elapsed >= timeout:
                 return False
 
-            # Wait before retrying (with exponential backoff capped at 5s)
-            wait_time = min(self.get_wait_time(), 5.0)
+            # Wait before retrying (outside the lock)
             if wait_time > 0:
                 time.sleep(wait_time)
 
@@ -146,8 +148,8 @@ class RateLimiter:
                 'requests_last_hour': len(self.hour_requests),
                 'minute_limit': self.requests_per_minute,
                 'hour_limit': self.requests_per_hour,
-                'can_proceed': self.can_proceed(),
-                'wait_time_seconds': self.get_wait_time()
+                'can_proceed': self._can_proceed_unlocked(),
+                'wait_time_seconds': self._get_wait_time_unlocked()
             }
 
 

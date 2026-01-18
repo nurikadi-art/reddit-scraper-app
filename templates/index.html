@@ -403,8 +403,8 @@
 
         <!-- Tab Navigation -->
         <div class="tab-container">
-            <button class="tab-btn active" onclick="showTab('generator')">Generate Scripts</button>
-            <button class="tab-btn" onclick="showTab('activity')">Activity Log</button>
+            <button class="tab-btn active" onclick="showTab('generator', this)">Generate Scripts</button>
+            <button class="tab-btn" onclick="showTab('activity', this)">Activity Log</button>
         </div>
 
         <!-- Generator Tab -->
@@ -603,8 +603,8 @@
                         resetButton();
                     }
 
-                    // Check if complete
-                    if (!data.running && data.scripts.length > 0) {
+                    // Check if complete (running=false means done, regardless of script count)
+                    if (!data.running) {
                         clearInterval(statusInterval);
                         resetButton();
                         document.getElementById('progress-fill').style.width = '100%';
@@ -674,7 +674,7 @@
         updateCategoryInfo();
 
         // Tab switching
-        function showTab(tabName) {
+        function showTab(tabName, buttonEl) {
             // Hide all tabs
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
@@ -685,7 +685,7 @@
 
             // Show selected tab
             document.getElementById(tabName + '-tab').classList.add('active');
-            event.target.classList.add('active');
+            buttonEl.classList.add('active');
 
             // Load activity log if switching to that tab
             if (tabName === 'activity') {
