@@ -7,6 +7,7 @@ Provides persistent logging with SQLite and rate limiting for API calls
 import sqlite3
 import time
 import threading
+import os
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any
 from collections import deque
@@ -527,20 +528,74 @@ class ActivityLogger:
             'summary': self.get_activity_summary(24)
         }
 
+    def get_database_info(self) -> Dict[str, Any]:
+        """Get database statistics and info"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+
+            # Total counts
+            cursor.execute('SELECT COUNT(*) FROM scrapes')
+            total_scrapes = cursor.fetchone()[0]
+
+            cursor.execute('SELECT COUNT(*) FROM script_generations')
+            total_scripts = cursor.fetchone()[0]
+
+            cursor.execute('SELECT COUNT(*) FROM sessions')
+            total_sessions = cursor.fetchone()[0]
+
+            # First and last entries
+            cursor.execute('SELECT MIN(timestamp), MAX(timestamp) FROM scrapes')
+            scrape_range = cursor.fetchone()
+
+            cursor.execute('SELECT MIN(timestamp), MAX(timestamp) FROM script_generations')
+            script_range = cursor.fetchone()
+
+            # Database file size
+            db_size = os.path.getsize(self.db_path) if os.path.exists(self.db_path) else 0
+
+            return {
+                'db_path': self.db_path,
+                'db_size_kb': round(db_size / 1024, 2),
+                'total_scrapes': total_scrapes,
+                'total_scripts': total_scripts,
+                'total_sessions': total_sessions,
+                'scrape_date_range': {
+                    'first': scrape_range[0],
+                    'last': scrape_range[1]
+                },
+                'script_date_range': {
+                    'first': script_range[0],
+                    'last': script_range[1]
+                }
+            }
+
 
 # Global logger instance
 _logger_instance: Optional[ActivityLogger] = None
 _logger_lock = threading.Lock()
 
 
-def get_logger(db_path: str = 'activity_log.db') -> ActivityLogger:
+# Default database path - use the same directory as this script
+_DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'activity_log.db')
+
+
+def get_logger(db_path: str = None) -> ActivityLogger:
     """Get or create the global logger instance (singleton pattern)"""
     global _logger_instance
+
+    if db_path is None:
+        db_path = _DEFAULT_DB_PATH
 
     with _logger_lock:
         if _logger_instance is None:
             _logger_instance = ActivityLogger(db_path)
+            print(f"[ActivityLogger] Database initialized at: {db_path}")
         return _logger_instance
+
+
+def get_db_path() -> str:
+    """Get the current database path"""
+    return _DEFAULT_DB_PATH
 
 
 def reset_logger():

@@ -387,6 +387,12 @@ def get_rate_limit_status():
     return jsonify(logger.get_rate_limit_status())
 
 
+@app.route('/database_info')
+def get_database_info():
+    """Get database info and all-time stats"""
+    return jsonify(logger.get_database_info())
+
+
 if __name__ == '__main__':
     print("\n" + "="*70)
     print("Viral Script Generator Web App")

@@ -549,6 +549,21 @@ with tab_logs:
     st.header("Activity Log")
     st.markdown("View all scrapes and script generations from all sessions")
 
+    # Database info panel
+    db_info = logger.get_database_info()
+    with st.expander("Database Info (Persistent Storage)", expanded=False):
+        st.code(f"Database Path: {db_info['db_path']}")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Sessions (All Time)", db_info['total_sessions'])
+        with col2:
+            st.metric("Total Scrapes (All Time)", db_info['total_scrapes'])
+        with col3:
+            st.metric("Total Scripts (All Time)", db_info['total_scripts'])
+        st.caption(f"Database size: {db_info['db_size_kb']} KB")
+        if db_info['scrape_date_range']['first']:
+            st.caption(f"Data range: {db_info['scrape_date_range']['first']} to {db_info['scrape_date_range']['last']}")
+
     # Refresh button
     if st.button("Refresh Logs"):
         st.rerun()
@@ -556,14 +571,15 @@ with tab_logs:
     # Get activity summary
     summary = logger.get_activity_summary(24)
 
-    # Summary metrics
+    # Summary metrics (24h)
+    st.subheader("Last 24 Hours")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Total Scrapes (24h)", summary['scrapes']['total'])
+        st.metric("Scrapes", summary['scrapes']['total'])
     with col2:
-        st.metric("Posts Found (24h)", summary['scrapes']['posts_found'])
+        st.metric("Posts Found", summary['scrapes']['posts_found'])
     with col3:
-        st.metric("Scripts Generated (24h)", summary['scripts']['total'])
+        st.metric("Scripts Generated", summary['scripts']['total'])
     with col4:
         st.metric("Rate Limited", summary['scripts']['rate_limited'])
 

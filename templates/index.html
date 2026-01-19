@@ -463,23 +463,43 @@
         <!-- Activity Log Tab -->
         <div id="activity-tab" class="tab-content">
             <div class="log-panel">
+                <!-- Database Info (All Time) -->
+                <div style="background: #e8f4e8; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3 style="margin: 0 0 10px 0; color: #2e7d32;">Persistent Database</h3>
+                    <div id="db-path" style="font-family: monospace; font-size: 12px; color: #666; margin-bottom: 10px;">Loading...</div>
+                    <div class="log-summary">
+                        <div class="summary-card">
+                            <div class="summary-value" id="db-total-sessions">-</div>
+                            <div class="summary-label">Total Sessions (All Time)</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-value" id="db-total-scrapes">-</div>
+                            <div class="summary-label">Total Scrapes (All Time)</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-value" id="db-total-scripts">-</div>
+                            <div class="summary-label">Total Scripts (All Time)</div>
+                        </div>
+                    </div>
+                </div>
+
                 <h2 style="margin-bottom: 20px;">Activity Summary (Last 24 Hours)</h2>
                 <div class="log-summary" id="log-summary">
                     <div class="summary-card">
                         <div class="summary-value" id="summary-scrapes">-</div>
-                        <div class="summary-label">Total Scrapes</div>
+                        <div class="summary-label">Scrapes (24h)</div>
                     </div>
                     <div class="summary-card">
                         <div class="summary-value" id="summary-posts">-</div>
-                        <div class="summary-label">Posts Found</div>
+                        <div class="summary-label">Posts Found (24h)</div>
                     </div>
                     <div class="summary-card">
                         <div class="summary-value" id="summary-scripts">-</div>
-                        <div class="summary-label">Scripts Generated</div>
+                        <div class="summary-label">Scripts (24h)</div>
                     </div>
                     <div class="summary-card">
                         <div class="summary-value" id="summary-rate-limited">-</div>
-                        <div class="summary-label">Rate Limited</div>
+                        <div class="summary-label">Rate Limited (24h)</div>
                     </div>
                 </div>
 
@@ -714,10 +734,22 @@
 
         // Load activity log
         function loadActivityLog() {
+            // Fetch database info (all time stats)
+            fetch('/database_info')
+                .then(response => response.json())
+                .then(dbInfo => {
+                    document.getElementById('db-path').textContent = `Path: ${dbInfo.db_path} (${dbInfo.db_size_kb} KB)`;
+                    document.getElementById('db-total-sessions').textContent = dbInfo.total_sessions;
+                    document.getElementById('db-total-scrapes').textContent = dbInfo.total_scrapes;
+                    document.getElementById('db-total-scripts').textContent = dbInfo.total_scripts;
+                })
+                .catch(error => console.error('Failed to fetch database info:', error));
+
+            // Fetch 24h activity log
             fetch('/activity_log?hours=24&limit=20')
                 .then(response => response.json())
                 .then(data => {
-                    // Update summary
+                    // Update summary (24h)
                     document.getElementById('summary-scrapes').textContent = data.summary.scrapes.total;
                     document.getElementById('summary-posts').textContent = data.summary.scrapes.posts_found;
                     document.getElementById('summary-scripts').textContent = data.summary.scripts.total;
