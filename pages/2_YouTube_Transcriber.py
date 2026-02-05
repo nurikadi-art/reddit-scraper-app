@@ -12,9 +12,12 @@ from datetime import datetime
 from typing import Optional
 
 # YouTube libraries
-from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
+from youtube_transcript_api import YouTubeTranscriptApi
 from pytubefix import YouTube
 from deep_translator import GoogleTranslator
+
+# Create API instance (new API style)
+ytt_api = YouTubeTranscriptApi()
 
 # Page config
 st.set_page_config(
@@ -87,30 +90,34 @@ def get_transcript(video_id: str, translate_to_english: bool = True) -> dict:
     is_auto_generated = False
     last_error = None
 
-    # Method 1: Try to get transcript with default (usually English or auto-generated)
+    # Method 1: Try to fetch transcript using new API (instance method)
     try:
-        transcript_data = YouTubeTranscriptApi.get_transcript(video_id)
+        transcript_data = ytt_api.fetch(video_id)
         original_language = 'en'
     except Exception as e:
         last_error = str(e)
 
-    # Method 2: Try specific languages
+    # Method 2: Try listing transcripts and get the first available
+    if transcript_data is None:
+        try:
+            transcript_list = ytt_api.list_transcripts(video_id)
+            for transcript in transcript_list:
+                transcript_data = transcript.fetch()
+                original_language = transcript.language_code
+                is_auto_generated = transcript.is_generated
+                break
+        except Exception as e:
+            last_error = str(e)
+
+    # Method 3: Try specific languages
     if transcript_data is None:
         for lang in ['en', 'en-US', 'en-GB', 'es', 'fr', 'de', 'pt', 'it', 'ru', 'ja', 'ko', 'zh-Hans', 'zh-Hant', 'hi', 'ar']:
             try:
-                transcript_data = YouTubeTranscriptApi.get_transcript(video_id, languages=[lang])
+                transcript_data = ytt_api.fetch(video_id, languages=[lang])
                 original_language = lang
                 break
             except:
                 continue
-
-    # Method 3: Try to get any available transcript with preserve_formatting
-    if transcript_data is None:
-        try:
-            transcript_data = YouTubeTranscriptApi.get_transcript(video_id, preserve_formatting=True)
-            original_language = 'unknown'
-        except Exception as e:
-            last_error = str(e)
 
     if transcript_data is None:
         error_msg = f"No transcript available for this video. "
