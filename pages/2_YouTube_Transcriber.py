@@ -83,49 +83,41 @@ def get_video_metadata(video_id: str) -> dict:
 def get_transcript(video_id: str, translate_to_english: bool = True) -> dict:
     """Get transcript for a YouTube video with optional translation."""
     try:
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-
-        transcript = None
-        original_language = None
+        # Try to get transcript - the API will return the best available
+        transcript_data = None
+        original_language = 'en'
         is_auto_generated = False
 
-        # First try manually created transcripts
+        # First try English
         try:
-            for t in transcript_list:
-                if not t.is_generated:
-                    transcript = t
-                    original_language = t.language_code
-                    break
+            transcript_data = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
+            original_language = 'en'
         except:
             pass
 
-        # If no manual transcript, try auto-generated
-        if transcript is None:
+        # If no English, try to get any available transcript
+        if transcript_data is None:
             try:
-                for t in transcript_list:
-                    if t.is_generated:
-                        transcript = t
-                        original_language = t.language_code
-                        is_auto_generated = True
-                        break
+                transcript_data = YouTubeTranscriptApi.get_transcript(video_id)
+                # Try to detect language from the response or default
+                original_language = 'unknown'
             except:
                 pass
 
-        # If still no transcript, try to get any available
-        if transcript is None:
+        # Try with auto-generated
+        if transcript_data is None:
             try:
-                transcript = transcript_list.find_transcript(['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'ja', 'ko', 'zh'])
-                original_language = transcript.language_code
+                transcript_data = YouTubeTranscriptApi.get_transcript(
+                    video_id,
+                    languages=['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'ja', 'ko', 'zh-Hans', 'zh-Hant']
+                )
+                is_auto_generated = True
             except:
-                for t in transcript_list:
-                    transcript = t
-                    original_language = t.language_code
-                    break
+                pass
 
-        if transcript is None:
+        if transcript_data is None:
             return {'error': 'No transcript available', 'video_id': video_id}
 
-        transcript_data = transcript.fetch()
         original_text = ' '.join([entry['text'] for entry in transcript_data])
 
         needs_translation = original_language and not original_language.startswith('en')
