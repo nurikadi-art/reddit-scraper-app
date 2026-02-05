@@ -82,79 +82,75 @@ def get_video_metadata(video_id: str) -> dict:
 
 def get_transcript(video_id: str, translate_to_english: bool = True) -> dict:
     """Get transcript for a YouTube video with optional translation."""
+    transcript_data = None
+    original_language = 'en'
+    is_auto_generated = False
+    last_error = None
+
+    # Method 1: Try to get transcript with default (usually English or auto-generated)
     try:
-        # Try to get transcript - the API will return the best available
-        transcript_data = None
+        transcript_data = YouTubeTranscriptApi.get_transcript(video_id)
         original_language = 'en'
-        is_auto_generated = False
-
-        # First try English
-        try:
-            transcript_data = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
-            original_language = 'en'
-        except:
-            pass
-
-        # If no English, try to get any available transcript
-        if transcript_data is None:
-            try:
-                transcript_data = YouTubeTranscriptApi.get_transcript(video_id)
-                # Try to detect language from the response or default
-                original_language = 'unknown'
-            except:
-                pass
-
-        # Try with auto-generated
-        if transcript_data is None:
-            try:
-                transcript_data = YouTubeTranscriptApi.get_transcript(
-                    video_id,
-                    languages=['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'ja', 'ko', 'zh-Hans', 'zh-Hant']
-                )
-                is_auto_generated = True
-            except:
-                pass
-
-        if transcript_data is None:
-            return {'error': 'No transcript available', 'video_id': video_id}
-
-        original_text = ' '.join([entry['text'] for entry in transcript_data])
-
-        needs_translation = original_language and not original_language.startswith('en')
-        translated_text = None
-
-        if needs_translation and translate_to_english:
-            try:
-                translator = GoogleTranslator(source='auto', target='en')
-                max_chars = 4500
-                if len(original_text) > max_chars:
-                    chunks = [original_text[i:i+max_chars] for i in range(0, len(original_text), max_chars)]
-                    translated_chunks = [translator.translate(chunk) for chunk in chunks]
-                    translated_text = ' '.join(translated_chunks)
-                else:
-                    translated_text = translator.translate(original_text)
-            except Exception as e:
-                translated_text = f"Translation error: {str(e)}"
-
-        language_name = LANGUAGE_NAMES.get(original_language, original_language)
-
-        return {
-            'video_id': video_id,
-            'original_language': original_language,
-            'language_name': language_name,
-            'is_auto_generated': is_auto_generated,
-            'original_transcript': original_text,
-            'english_transcript': translated_text if needs_translation else original_text,
-            'was_translated': needs_translation,
-            'transcript_segments': transcript_data
-        }
-
-    except TranscriptsDisabled:
-        return {'error': 'Transcripts are disabled for this video', 'video_id': video_id}
-    except NoTranscriptFound:
-        return {'error': 'No transcript found for this video', 'video_id': video_id}
     except Exception as e:
-        return {'error': str(e), 'video_id': video_id}
+        last_error = str(e)
+
+    # Method 2: Try specific languages
+    if transcript_data is None:
+        for lang in ['en', 'en-US', 'en-GB', 'es', 'fr', 'de', 'pt', 'it', 'ru', 'ja', 'ko', 'zh-Hans', 'zh-Hant', 'hi', 'ar']:
+            try:
+                transcript_data = YouTubeTranscriptApi.get_transcript(video_id, languages=[lang])
+                original_language = lang
+                break
+            except:
+                continue
+
+    # Method 3: Try to get any available transcript with preserve_formatting
+    if transcript_data is None:
+        try:
+            transcript_data = YouTubeTranscriptApi.get_transcript(video_id, preserve_formatting=True)
+            original_language = 'unknown'
+        except Exception as e:
+            last_error = str(e)
+
+    if transcript_data is None:
+        error_msg = f"No transcript available for this video. "
+        if last_error:
+            if "disabled" in last_error.lower():
+                error_msg += "Transcripts are disabled by the video owner."
+            elif "no transcript" in last_error.lower():
+                error_msg += "This video has no captions/subtitles."
+            else:
+                error_msg += f"({last_error})"
+        return {'error': error_msg, 'video_id': video_id}
+
+    needs_translation = original_language and not original_language.startswith('en')
+    translated_text = None
+
+    if needs_translation and translate_to_english:
+        try:
+            translator = GoogleTranslator(source='auto', target='en')
+            max_chars = 4500
+            if len(original_text) > max_chars:
+                chunks = [original_text[i:i+max_chars] for i in range(0, len(original_text), max_chars)]
+                translated_chunks = [translator.translate(chunk) for chunk in chunks]
+                translated_text = ' '.join(translated_chunks)
+            else:
+                translated_text = translator.translate(original_text)
+        except Exception as e:
+            translated_text = f"Translation error: {str(e)}"
+
+    language_name = LANGUAGE_NAMES.get(original_language, original_language)
+
+    return {
+        'video_id': video_id,
+        'original_language': original_language,
+        'language_name': language_name,
+        'is_auto_generated': is_auto_generated,
+        'original_transcript': original_text,
+        'english_transcript': translated_text if needs_translation else original_text,
+        'was_translated': needs_translation,
+        'transcript_segments': transcript_data
+    }
 
 
 def generate_export_text(results: list) -> str:
