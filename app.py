@@ -6,8 +6,10 @@ Flask application that scrapes viral Reddit posts and generates viral Reels/Shor
 
 from flask import Flask, render_template, jsonify, request
 from reddit_scraper import RedditScraper, SUBREDDIT_CATEGORIES
+from notion_dashboard import create_power_dashboard, export_scripts_to_notion
 from datetime import datetime
 import json
+import os
 import threading
 from pathlib import Path
 
@@ -263,6 +265,47 @@ def get_status():
 def get_scripts():
     """Get generated scripts"""
     return jsonify({'scripts': scraping_status['scripts']})
+
+
+@app.route('/create_notion_dashboard', methods=['POST'])
+def create_notion_dashboard_route():
+    """Create the Power Dashboard in Notion"""
+    data = request.json
+    token = data.get('notion_token') or os.getenv('NOTION_API_KEY')
+
+    if not token:
+        return jsonify({'error': 'Notion API token is required'}), 400
+
+    try:
+        result = create_power_dashboard(token)
+        return jsonify({
+            'success': True,
+            'dashboard_url': result['dashboard_url'],
+            'dashboard_page_id': result['dashboard_page_id'],
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/export_to_notion', methods=['POST'])
+def export_to_notion_route():
+    """Export generated scripts to a Notion project database"""
+    data = request.json
+    token = data.get('notion_token') or os.getenv('NOTION_API_KEY')
+    database_id = data.get('database_id')
+
+    if not token or not database_id:
+        return jsonify({'error': 'notion_token and database_id are required'}), 400
+
+    scripts = scraping_status.get('scripts', [])
+    if not scripts:
+        return jsonify({'error': 'No scripts to export. Generate scripts first.'}), 400
+
+    try:
+        count = export_scripts_to_notion(token, database_id, scripts)
+        return jsonify({'success': True, 'exported': count})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
