@@ -123,6 +123,9 @@ def get_transcript(video_id: str, translate_to_english: bool = True) -> dict:
                 error_msg += f"({last_error})"
         return {'error': error_msg, 'video_id': video_id}
 
+    # Extract text from transcript data
+    original_text = ' '.join([entry.get('text', '') for entry in transcript_data])
+
     needs_translation = original_language and not original_language.startswith('en')
     translated_text = None
 
