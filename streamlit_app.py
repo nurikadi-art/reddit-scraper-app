@@ -54,11 +54,9 @@ with col2:
     - Auto-detect original language
     - Translate to English automatically
     - Display channel name, title, thumbnail
-    - Export to Google Docs
-    - Download as JSON
+    - Download as Text or JSON
 
-    **Requirements:**
-    - Google credentials (for Docs export - optional)
+    **No API keys required!**
     """)
 
     if st.button("Open YouTube Transcriber", type="primary", key="youtube"):
@@ -70,7 +68,10 @@ st.divider()
 st.markdown("""
 ## Quick Start Guide
 
-### Setting Up API Keys
+### YouTube Transcriber (No setup required!)
+Just open the YouTube Transcriber and paste your video URLs. No API keys needed.
+
+### Viral Script Generator Setup
 
 **For Streamlit Cloud deployment:**
 1. Go to your app settings (gear icon)
@@ -80,10 +81,6 @@ st.markdown("""
 ```toml
 ANTHROPIC_API_KEY = "your-anthropic-key"
 STEADYAPI_KEY = "your-steadyapi-key"
-
-# Optional: For Google Docs export
-GOOGLE_CLIENT_ID = "your-google-client-id"
-GOOGLE_CLIENT_SECRET = "your-google-client-secret"
 ```
 
 **For local development:**
@@ -94,11 +91,10 @@ ANTHROPIC_API_KEY=your-anthropic-key
 STEADYAPI_KEY=your-steadyapi-key
 ```
 
-### Getting API Keys
+### Getting API Keys (for Viral Script Generator only)
 
 - **Anthropic API:** [console.anthropic.com](https://console.anthropic.com/)
 - **SteadyAPI:** [steadyapi.com](https://steadyapi.com/)
-- **Google Cloud:** [console.cloud.google.com](https://console.cloud.google.com/) (Enable Docs API)
 """)
 
 # Sidebar info
